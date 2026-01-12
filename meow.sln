@@ -1,0 +1,18 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36623.8 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "meow", "meow.shproj", "{8FDC7281-EE9D-4E48-9AA3-C58644F00F6D}"
+EndProject
+Global
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3BECAE18-23A2-4C06-AD92-51DAFED403A6}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		meow.projitems*{8fdc7281-ee9d-4e48-9aa3-c58644f00f6d}*SharedItemsImports = 13
+	EndGlobalSection
+EndGlobal
