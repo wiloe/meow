@@ -1,0 +1,27 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "clang-llvm",
+            "displayName": "Clang (LLVM)",
+            "description": "Use Clang compiler with vcpkg",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_TOOLCHAIN_FILE": "C:/Users/golde/source/repos/microsoft/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_MAKE_PROGRAM": "C:/ninja.exe"
+            }
+        },
+        {
+            "name": "clang-llvm-release",
+            "displayName": "Clang (LLVM) Release",
+            "inherits": "clang-llvm",
+            "binaryDir": "${sourceDir}/build-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ]
+}
