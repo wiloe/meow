@@ -334,6 +334,82 @@ int consoleIndex = 0;
 bool showRomWriteWarning = false;
 int romWriteWarningTimer = 0;
 
+// --- File Dialog ---
+typedef struct {
+  bool active;
+  char dirPath[512];
+  FilePathList files;
+  char **displayNames;
+  int count;
+  int scrollIndex;
+  int activeItem;
+  int focusItem;
+  char selectedPath[512];
+  bool fileSelected;
+} GuiFileDialogState;
+
+GuiFileDialogState fileDialog = {0};
+
+void InitFileDialog(const char *initDir) {
+  fileDialog.active = false;
+  strncpy(fileDialog.dirPath, initDir, 511);
+  fileDialog.files.count = 0;
+  fileDialog.count = 0;
+  fileDialog.displayNames = NULL;
+}
+
+void RefreshFileList() {
+  if (fileDialog.files.count > 0)
+    UnloadDirectoryFiles(fileDialog.files);
+  if (fileDialog.displayNames) {
+    for (int i = 0; i < fileDialog.count; i++)
+      free(fileDialog.displayNames[i]);
+    free(fileDialog.displayNames);
+  }
+
+  if (DirectoryExists(fileDialog.dirPath)) {
+    fileDialog.files = LoadDirectoryFiles(fileDialog.dirPath);
+    fileDialog.count = fileDialog.files.count;
+    fileDialog.displayNames =
+        (char **)malloc(fileDialog.count * sizeof(char *));
+
+    for (int i = 0; i < fileDialog.count; i++) {
+      const char *name = GetFileName(fileDialog.files.paths[i]);
+      bool isDir = DirectoryExists(fileDialog.files.paths[i]);
+
+      fileDialog.displayNames[i] = (char *)malloc(strlen(name) + 2);
+      strcpy(fileDialog.displayNames[i], name);
+      if (isDir)
+        strcat(fileDialog.displayNames[i], "/");
+    }
+  } else {
+    fileDialog.count = 0;
+    fileDialog.displayNames = NULL;
+  }
+  fileDialog.activeItem = -1;
+  fileDialog.focusItem = -1;
+  fileDialog.scrollIndex = 0;
+}
+
+void OpenFileDialog() {
+  fileDialog.active = true;
+  fileDialog.fileSelected = false;
+  RefreshFileList();
+}
+
+void CloseFileDialog() {
+  fileDialog.active = false;
+  if (fileDialog.files.count > 0)
+    UnloadDirectoryFiles(fileDialog.files);
+  if (fileDialog.displayNames) {
+    for (int i = 0; i < fileDialog.count; i++)
+      free(fileDialog.displayNames[i]);
+    free(fileDialog.displayNames);
+    fileDialog.displayNames = NULL;
+  }
+  fileDialog.count = 0;
+}
+
 // Audio State
 AudioStream audioStream;
 float wavePhase = 0.0f;
@@ -483,6 +559,26 @@ void SimpleAssemble(CPU *cpu, const char *source) {
   }
 }
 
+void SetCustomStyle() {
+  // Dark Theme Example
+  GuiSetStyle(DEFAULT, BACKGROUND_COLOR, 0x2D2D2DFF);
+  GuiSetStyle(DEFAULT, LINE_COLOR, 0x636363FF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, 0xDEDEDEFF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED, 0x87CFFFFF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_PRESSED, 0x0492C7FF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_DISABLED, 0x7C7C7CFF);
+
+  GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, 0x454545FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, 0x5BB2D9FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, 0x0492C7FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_DISABLED, 0x454545FF);
+
+  GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, 0x454545FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_FOCUSED, 0x454545FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_PRESSED, 0x323232FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_DISABLED, 0x2D2D2DFF);
+}
+
 int main(int argc, char *argv[]) {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "6502 Emulator (C + Raylib)");
   SetTargetFPS(60);
@@ -493,13 +589,18 @@ int main(int argc, char *argv[]) {
   SetAudioStreamCallback(audioStream, AudioInputCallback);
   PlayAudioStream(audioStream);
 
+  // Apply custom style
+  SetCustomStyle();
+
+  // Initialize File Dialog
+  InitFileDialog(GetWorkingDirectory());
+
   // Initialize 6502 CPU
   CPU cpu;
   memset(cpu.memory, 0, MEM_SIZE); // Clear memory explicitly on startup
   cpu.write_callback = OnCpuWrite;
 
   // GUI State
-  bool showMemory = true;
   int memStart = 0x0000;
   bool editAddrMode = false;
   bool showGraphics = false;
@@ -595,6 +696,10 @@ int main(int argc, char *argv[]) {
     // Draw
     BeginDrawing();
     ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
+
+    // Disable main UI if dialog is open
+    if (fileDialog.active)
+      GuiLock();
 
     // --- CPU Status Panel ---
     GuiPanel((Rectangle){10, 10, 220, 200}, "CPU Registers");
@@ -830,7 +935,7 @@ int main(int argc, char *argv[]) {
       editFileMode = !editFileMode;
     }
 
-    if (GuiButton((Rectangle){470, 70, 60, 25}, "Load")) {
+    if (GuiButton((Rectangle){470, 70, 50, 25}, "Load")) {
       FILE *f = fopen(fileBuffer, "rb");
       if (f) {
         // Load at current memory view address (or fixed 0x0000/0x8000 depending
@@ -842,7 +947,11 @@ int main(int argc, char *argv[]) {
         snprintf(statusMsg, 64, "Failed to open!");
       }
     }
-    GuiLabel((Rectangle){540, 70, 200, 25}, statusMsg);
+    if (GuiButton((Rectangle){525, 70, 25, 25}, "...")) {
+      OpenFileDialog();
+    }
+
+    GuiLabel((Rectangle){560, 70, 180, 25}, statusMsg);
 
     // --- Snapshots ---
     if (GuiButton((Rectangle){650, 70, 60, 25}, "Save")) {
@@ -925,6 +1034,60 @@ int main(int argc, char *argv[]) {
         DrawText(TextFormat("$%02X: %llu (%.1f%%)", opcode, count,
                             percentage * 100.0f),
                  255, 490 + i * 22 + 2, 10, WHITE);
+      }
+    }
+
+    // --- File Dialog Overlay ---
+    if (fileDialog.active) {
+      GuiUnlock();
+      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.5f));
+
+      Rectangle winBounds = {(float)SCREEN_WIDTH / 2 - 200,
+                             (float)SCREEN_HEIGHT / 2 - 150, 400, 300};
+      if (GuiWindowBox(winBounds, "Select File"))
+        CloseFileDialog();
+
+      // Up Button
+      if (GuiButton((Rectangle){winBounds.x + 10, winBounds.y + 30, 30, 25},
+                    "^")) {
+        const char *parent = GetPrevDirectoryPath(fileDialog.dirPath);
+        strncpy(fileDialog.dirPath, parent, 511);
+        RefreshFileList();
+      }
+      GuiLabel((Rectangle){winBounds.x + 50, winBounds.y + 30, 340, 25},
+               fileDialog.dirPath);
+
+      // File List
+      Rectangle listBounds = {winBounds.x + 10, winBounds.y + 60, 380, 200};
+      GuiListViewEx(listBounds, (const char **)fileDialog.displayNames,
+                    fileDialog.count, &fileDialog.scrollIndex,
+                    &fileDialog.activeItem, &fileDialog.focusItem);
+
+      // Buttons
+      if (GuiButton((Rectangle){winBounds.x + 250, winBounds.y + 265, 60, 25},
+                    "Open")) {
+        if (fileDialog.activeItem >= 0 &&
+            fileDialog.activeItem < fileDialog.count) {
+          const char *selected = fileDialog.files.paths[fileDialog.activeItem];
+          if (DirectoryExists(selected)) {
+            strncpy(fileDialog.dirPath, selected, 511);
+            RefreshFileList();
+          } else {
+            strncpy(fileBuffer, selected, 63);
+            CloseFileDialog();
+            // Auto-load
+            FILE *f = fopen(fileBuffer, "rb");
+            if (f) {
+              fread(&cpu.memory[memStart], 1, MEM_SIZE - memStart, f);
+              fclose(f);
+              snprintf(statusMsg, 64, "Loaded: %s", GetFileName(fileBuffer));
+            }
+          }
+        }
+      }
+      if (GuiButton((Rectangle){winBounds.x + 320, winBounds.y + 265, 60, 25},
+                    "Cancel")) {
+        CloseFileDialog();
       }
     }
 

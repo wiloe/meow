@@ -1,0 +1,21 @@
+# ninja log v7
+3	92	7900473082112046	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-mkdir	bd05f0e37f7260e3
+3	92	7900473082112046	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-mkdir	bd05f0e37f7260e3
+93	39552	7900473476714809	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download	8b09555b6adba16e
+93	39552	7900473476714809	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download	8b09555b6adba16e
+39552	41699	7900473476783599	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-update	cdf802f7b4a89a16
+39552	41699	7900473476783599	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-update	cdf802f7b4a89a16
+41700	41776	7900473498966662	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-patch	50bf1897ad56a90b
+41700	41776	7900473498966662	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-patch	50bf1897ad56a90b
+41777	41848	7900473499676547	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-configure	b6a375712493d714
+41777	41848	7900473499676547	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-configure	b6a375712493d714
+41848	41922	7900473500412412	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-build	488029a11439ff26
+41848	41922	7900473500412412	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-build	488029a11439ff26
+41922	41995	7900473501151298	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-install	730687d0e3ae441
+41922	41995	7900473501151298	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-install	730687d0e3ae441
+41996	42070	7900473501889957	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-test	ebc2415d52390f65
+41996	42070	7900473501889957	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-test	ebc2415d52390f65
+42070	42172	7900473502917278	CMakeFiles/raylib-populate-complete	a5498e6d43479beb
+42070	42172	7900473502917278	raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-done	a5498e6d43479beb
+42070	42172	7900473502917278	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/CMakeFiles/raylib-populate-complete	a5498e6d43479beb
+42070	42172	7900473502917278	C:/Users/golde/source/repos/meow/build/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-done	a5498e6d43479beb
