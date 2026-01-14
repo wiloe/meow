@@ -12,6 +12,26 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
+// Simple 16-color palette (C64 style)
+static const Color PALETTE[16] = {
+    {0, 0, 0, 255},       // 0: Black
+    {255, 255, 255, 255}, // 1: White
+    {136, 0, 0, 255},     // 2: Red
+    {170, 255, 238, 255}, // 3: Cyan
+    {204, 68, 204, 255},  // 4: Purple
+    {0, 204, 85, 255},    // 5: Green
+    {0, 0, 170, 255},     // 6: Blue
+    {238, 238, 119, 255}, // 7: Yellow
+    {221, 136, 85, 255},  // 8: Orange
+    {102, 68, 0, 255},    // 9: Brown
+    {255, 119, 119, 255}, // 10: Light Red
+    {51, 51, 51, 255},    // 11: Dark Grey
+    {119, 119, 119, 255}, // 12: Grey
+    {170, 255, 102, 255}, // 13: Light Green
+    {0, 136, 255, 255},   // 14: Light Blue
+    {187, 187, 187, 255}  // 15: Light Grey
+};
+
 int GetInstructionLength(uint8_t opcode) {
   switch (opcode) {
   case 0x0A:
@@ -625,6 +645,7 @@ int main(int argc, char *argv[]) {
       snprintf(statusMsg, 64, "Loaded CLI: %s", GetFileName(argv[1]));
       strncpy(fileBuffer, argv[1], 63);
       fileBuffer[63] = '\0';
+      runEmulation = true;
     } else {
       snprintf(statusMsg, 64, "CLI Load Failed");
     }
@@ -643,6 +664,7 @@ int main(int argc, char *argv[]) {
       snprintf(statusMsg, 64, "Auto-Loaded: %s", GetFileName(romPath));
       strncpy(fileBuffer, romPath, 63);
       fileBuffer[63] = '\0';
+      runEmulation = true;
     }
   }
 
@@ -828,7 +850,7 @@ int main(int argc, char *argv[]) {
       int addr = 0x0100 + offset;
       uint8_t val = cpu.memory[addr];
 
-      Color col = DARKGRAY;
+      Color col = LIGHTGRAY;
       const char *prefix = "   ";
       if (i == 0) {
         col = RED; // Highlight SP
@@ -858,7 +880,7 @@ int main(int argc, char *argv[]) {
         breakpoints[pc] = isBp;
       }
 
-      Color textColor = DARKGRAY;
+      Color textColor = LIGHTGRAY;
       if (i == 0) {
         textColor = RED;
       }
@@ -907,14 +929,22 @@ int main(int argc, char *argv[]) {
     int startX = (int)memRect.x + 10;
 
     if (showGraphics) {
-      int scale = 8;
+      // Calculate scale to fit available space
+      float availableWidth = memRect.width - 20;
+      float availableHeight = memRect.height - 110; // 100 offset + 10 padding
+      int scaleW = (int)(availableWidth / 32);
+      int scaleH = (int)(availableHeight / 32);
+      int scale = (scaleW < scaleH) ? scaleW : scaleH;
+      if (scale < 1)
+        scale = 1;
+
       int imgX = (int)(memRect.x +
                        (memRect.width - 32 * scale) / 2); // Center in panel
 
       for (int y = 0; y < 32; y++) {
         for (int x = 0; x < 32; x++) {
           uint8_t val = cpu.memory[0x2000 + y * 32 + x];
-          Color col = (Color){val, val, val, 255};
+          Color col = PALETTE[val & 0x0F];
           DrawRectangle(imgX + x * scale, startY + y * scale, scale, scale,
                         col);
         }
@@ -928,7 +958,7 @@ int main(int argc, char *argv[]) {
           break;
 
         DrawText(TextFormat("0x%04X", rowAddr), startX, startY + row * 20, 10,
-                 DARKGRAY);
+                 GRAY);
 
         for (int col = 0; col < 16; col++) {
           int addr = rowAddr + col;
@@ -946,12 +976,12 @@ int main(int argc, char *argv[]) {
 
           unsigned char val = cpu.memory[addr];
           DrawText(TextFormat("%02X", val), startX + 50 + col * 20,
-                   startY + row * 20, 10, BLACK);
+                   startY + row * 20, 10, WHITE);
 
           // ASCII
           char c = (val >= 32 && val <= 126) ? (char)val : '.';
           DrawText(TextFormat("%c", c), startX + 380 + col * 10,
-                   startY + row * 20, 10, DARKGRAY);
+                   startY + row * 20, 10, GRAY);
         }
       }
     }
@@ -978,8 +1008,11 @@ int main(int argc, char *argv[]) {
         fread(&cpu.memory[memStart], 1, MEM_SIZE - memStart, f);
         fclose(f);
         snprintf(statusMsg, 64, "Loaded at 0x%04X", memStart);
+        runEmulation = true;
       } else {
         snprintf(statusMsg, 64, "Failed to open!");
+        // Fallback: Fill video memory with noise to show graphics mode works
+        for (int i = 0x2000; i < 0x2400; i++) cpu.memory[i] = GetRandomValue(0, 15);
       }
     }
     if (GuiButton((Rectangle){memRect.x + 285, memRect.y + 60, 25, 25},
@@ -1018,7 +1051,7 @@ int main(int argc, char *argv[]) {
       GuiDrawText(consoleBuffer,
                   (Rectangle){bottomRect.x + 10, bottomRect.y + 20,
                               bottomRect.width - 20, bottomRect.height - 30},
-                  TEXT_ALIGN_LEFT, DARKGRAY);
+                  TEXT_ALIGN_LEFT, LIGHTGRAY);
     } else if (bottomTab == 1) {
       GuiPanel(bottomRect, "Simple Assembler (Start: $0600)");
       if (GuiTextBox((Rectangle){bottomRect.x + 10, bottomRect.y + 20,
@@ -1130,6 +1163,7 @@ int main(int argc, char *argv[]) {
               fread(&cpu.memory[memStart], 1, MEM_SIZE - memStart, f);
               fclose(f);
               snprintf(statusMsg, 64, "Loaded: %s", GetFileName(fileBuffer));
+              runEmulation = true;
             }
           }
         }
