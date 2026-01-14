@@ -1,6 +1,6 @@
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
-
 
 // --- Assembler Helpers ---
 uint8_t memory[65536];

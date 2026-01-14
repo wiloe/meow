@@ -1012,7 +1012,8 @@ int main(int argc, char *argv[]) {
       } else {
         snprintf(statusMsg, 64, "Failed to open!");
         // Fallback: Fill video memory with noise to show graphics mode works
-        for (int i = 0x2000; i < 0x2400; i++) cpu.memory[i] = GetRandomValue(0, 15);
+        for (int i = 0x2000; i < 0x2400; i++)
+          cpu.memory[i] = GetRandomValue(0, 15);
       }
     }
     if (GuiButton((Rectangle){memRect.x + 285, memRect.y + 60, 25, 25},
