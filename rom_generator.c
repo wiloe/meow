@@ -1,76 +1,93 @@
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 
+// --- Assembler Helpers ---
+uint8_t memory[65536];
+uint16_t pc = 0x8000;
+
+void emit(uint8_t b) { memory[pc++] = b; }
+void emit_w(uint16_t w) {
+  emit(w & 0xFF);
+  emit(w >> 8);
+}
+void emit_rel(int offset) { emit((uint8_t)offset); }
+
+// Opcodes (Mini Assembler)
+void LDA_IMM(uint8_t v) {
+  emit(0xA9);
+  emit(v);
+}
+void STA_ZP(uint8_t v) {
+  emit(0x85);
+  emit(v);
+}
+void LDX_IMM(uint8_t v) {
+  emit(0xA2);
+  emit(v);
+}
+void TXA() { emit(0x8A); }
+void ADC_ZP(uint8_t v) {
+  emit(0x65);
+  emit(v);
+}
+void STA_ABSX(uint16_t v) {
+  emit(0x9D);
+  emit_w(v);
+}
+void INX() { emit(0xE8); }
+void BNE(int8_t off) {
+  emit(0xD0);
+  emit_rel(off);
+}
+void INC_ZP(uint8_t v) {
+  emit(0xE6);
+  emit(v);
+}
+void JMP_ABS(uint16_t v) {
+  emit(0x4C);
+  emit_w(v);
+}
+
 int main() {
-  uint8_t memory[65536];
   // Clear memory to 0
   memset(memory, 0, sizeof(memory));
 
   // --- 6502 Assembly Program ---
   // Start Address: $8000
-  uint16_t pc = 0x8000;
+  pc = 0x8000;
   uint16_t start_addr = pc;
 
   // 1. Initialize Animation Counter (Zero Page $00)
-  // LDA #$00
-  memory[pc++] = 0xA9;
-  memory[pc++] = 0x00;
-  // STA $00
-  memory[pc++] = 0x85;
-  memory[pc++] = 0x00;
+  LDA_IMM(0x00);
+  STA_ZP(0x00);
 
   // LoopStart:
   uint16_t loop_start = pc;
 
   // 2. Inner Loop: Fill Video Memory ($2000-$23FF)
-  // LDX #$00
-  memory[pc++] = 0xA2;
-  memory[pc++] = 0x00;
+  LDX_IMM(0x00);
 
   // FillLoop:
   uint16_t fill_loop = pc;
 
-  // TXA (Transfer X to A)
-  memory[pc++] = 0x8A;
-  // ADC $00 (Add animation counter to create shifting pattern)
-  memory[pc++] = 0x65;
-  memory[pc++] = 0x00;
+  TXA();
+  ADC_ZP(0x00); // Add animation counter to create shifting pattern
 
-  // STA $2000, X (Write to 1st quarter of screen)
-  memory[pc++] = 0x9D;
-  memory[pc++] = 0x00;
-  memory[pc++] = 0x20;
-  // STA $2100, X (Write to 2nd quarter)
-  memory[pc++] = 0x9D;
-  memory[pc++] = 0x00;
-  memory[pc++] = 0x21;
-  // STA $2200, X (Write to 3rd quarter)
-  memory[pc++] = 0x9D;
-  memory[pc++] = 0x00;
-  memory[pc++] = 0x22;
-  // STA $2300, X (Write to 4th quarter)
-  memory[pc++] = 0x9D;
-  memory[pc++] = 0x00;
-  memory[pc++] = 0x23;
+  // Write to 4 quarters of screen
+  STA_ABSX(0x2000);
+  STA_ABSX(0x2100);
+  STA_ABSX(0x2200);
+  STA_ABSX(0x2300);
 
-  // INX
-  memory[pc++] = 0xE8;
-  // BNE FillLoop (Loop until X wraps back to 0)
-  memory[pc++] = 0xD0;
-  memory[pc++] = (uint8_t)(fill_loop - (pc + 1));
+  INX();
+  BNE(fill_loop - (pc + 2)); // Loop until X wraps back to 0
 
   // 3. Update Animation Counter
-  // INC $00
-  memory[pc++] = 0xE6;
-  memory[pc++] = 0x00;
+  INC_ZP(0x00);
 
   // 4. Infinite Loop
-  // JMP LoopStart
-  memory[pc++] = 0x4C;
-  memory[pc++] = loop_start & 0xFF;
-  memory[pc++] = (loop_start >> 8) & 0xFF;
+  JMP_ABS(loop_start);
 
   // --- Reset Vector ---
   // The 6502 reads address $FFFC-$FFFD on startup to know where to begin.
