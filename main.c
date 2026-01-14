@@ -580,7 +580,9 @@ void SetCustomStyle() {
 }
 
 int main(int argc, char *argv[]) {
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "6502 Emulator (C + Raylib)");
+  MaximizeWindow();
   SetTargetFPS(60);
 
   // Initialize Audio
@@ -628,11 +630,19 @@ int main(int argc, char *argv[]) {
     }
   } else {
     // Auto-load rom.bin if it exists
-    FILE *f = fopen("rom.bin", "rb");
+    const char *romPath = "rom.bin";
+    FILE *f = fopen(romPath, "rb");
+    if (!f) {
+      romPath = "../rom.bin"; // Try parent directory (common in build folders)
+      f = fopen(romPath, "rb");
+    }
+
     if (f) {
       fread(cpu.memory, 1, MEM_SIZE, f);
       fclose(f);
-      snprintf(statusMsg, 64, "Auto-Loaded: rom.bin");
+      snprintf(statusMsg, 64, "Auto-Loaded: %s", GetFileName(romPath));
+      strncpy(fileBuffer, romPath, 63);
+      fileBuffer[63] = '\0';
     }
   }
 
@@ -697,53 +707,67 @@ int main(int argc, char *argv[]) {
     BeginDrawing();
     ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
 
+    // --- Layout Calculations ---
+    float scrW = (float)GetScreenWidth();
+    float scrH = (float)GetScreenHeight();
+    float margin = 10;
+    float sidebarW = 220;
+    float rightX = margin + sidebarW + margin;
+    float rightW = scrW - rightX - margin;
+    float bottomH = 180;
+    float tabH = 25;
+    float mainH = scrH - margin - margin - bottomH - tabH;
+    if (mainH < 200)
+      mainH = 200; // Minimum height safety
+
     // Disable main UI if dialog is open
     if (fileDialog.active)
       GuiLock();
 
     // --- CPU Status Panel ---
-    GuiPanel((Rectangle){10, 10, 220, 200}, "CPU Registers");
+    GuiPanel((Rectangle){margin, margin, sidebarW, 200}, "CPU Registers");
 
-    GuiLabel((Rectangle){25, 40, 30, 20}, "PC:");
+    GuiLabel((Rectangle){margin + 15, 40, 30, 20}, "PC:");
     if (!editPc)
       snprintf(regPcBuf, 5, "%04X", cpu.pc);
-    if (GuiTextBox((Rectangle){55, 40, 60, 20}, regPcBuf, 5, editPc)) {
+    if (GuiTextBox((Rectangle){margin + 45, 40, 60, 20}, regPcBuf, 5, editPc)) {
       editPc = !editPc;
       if (!editPc)
         cpu.pc = (uint16_t)strtol(regPcBuf, NULL, 16);
     }
 
-    GuiLabel((Rectangle){25, 65, 30, 20}, "A:");
+    GuiLabel((Rectangle){margin + 15, 65, 30, 20}, "A:");
     if (!editA)
       snprintf(regABuf, 3, "%02X", cpu.a);
-    if (GuiTextBox((Rectangle){55, 65, 40, 20}, regABuf, 3, editA)) {
+    if (GuiTextBox((Rectangle){margin + 45, 65, 40, 20}, regABuf, 3, editA)) {
       editA = !editA;
       if (!editA)
         cpu.a = (uint8_t)strtol(regABuf, NULL, 16);
     }
 
-    GuiLabel((Rectangle){25, 90, 30, 20}, "X:");
+    GuiLabel((Rectangle){margin + 15, 90, 30, 20}, "X:");
     if (!editX)
       snprintf(regXBuf, 3, "%02X", cpu.x);
-    if (GuiTextBox((Rectangle){55, 90, 40, 20}, regXBuf, 3, editX)) {
+    if (GuiTextBox((Rectangle){margin + 45, 90, 40, 20}, regXBuf, 3, editX)) {
       editX = !editX;
       if (!editX)
         cpu.x = (uint8_t)strtol(regXBuf, NULL, 16);
     }
 
-    GuiLabel((Rectangle){25, 115, 30, 20}, "Y:");
+    GuiLabel((Rectangle){margin + 15, 115, 30, 20}, "Y:");
     if (!editY)
       snprintf(regYBuf, 3, "%02X", cpu.y);
-    if (GuiTextBox((Rectangle){55, 115, 40, 20}, regYBuf, 3, editY)) {
+    if (GuiTextBox((Rectangle){margin + 45, 115, 40, 20}, regYBuf, 3, editY)) {
       editY = !editY;
       if (!editY)
         cpu.y = (uint8_t)strtol(regYBuf, NULL, 16);
     }
 
-    GuiLabel((Rectangle){25, 140, 30, 20}, "SP:");
+    GuiLabel((Rectangle){margin + 15, 140, 30, 20}, "SP:");
     if (!editSp)
       snprintf(regSpBuf, 3, "%02X", cpu.sp);
-    if (GuiTextBox((Rectangle){55, 140, 40, 20}, regSpBuf, 3, editSp)) {
+    if (GuiTextBox((Rectangle){margin + 45, 140, 40, 20}, regSpBuf, 3,
+                   editSp)) {
       editSp = !editSp;
       if (!editSp)
         cpu.sp = (uint8_t)strtol(regSpBuf, NULL, 16);
@@ -751,28 +775,28 @@ int main(int argc, char *argv[]) {
 
     // Flags visualization (NV-BDIZC)
     GuiLabel(
-        (Rectangle){25, 165, 180, 20},
+        (Rectangle){margin + 15, 165, 180, 20},
         TextFormat(
             "Flags: %c%c-%c%c%c%c%c", (cpu.status & 0x80) ? 'N' : '.',
             (cpu.status & 0x40) ? 'V' : '.', (cpu.status & 0x10) ? 'B' : '.',
             (cpu.status & 0x08) ? 'D' : '.', (cpu.status & 0x04) ? 'I' : '.',
             (cpu.status & 0x02) ? 'Z' : '.', (cpu.status & 0x01) ? 'C' : '.'));
 
-    GuiLabel((Rectangle){25, 185, 180, 20},
+    GuiLabel((Rectangle){margin + 15, 185, 180, 20},
              TextFormat("FPS: %d  Speed: %.2f MHz", GetFPS(),
                         (float)cyclesThisFrame * GetFPS() / 1000000.0f));
 
     // --- Controls ---
-    if (GuiButton((Rectangle){10, 220, 65, 30}, "Step")) {
+    if (GuiButton((Rectangle){margin, 220, 65, 30}, "Step")) {
       runEmulation = false;
       cpu_step(&cpu);
     }
-    if (GuiButton((Rectangle){80, 220, 65, 30},
+    if (GuiButton((Rectangle){margin + 70, 220, 65, 30},
                   runEmulation ? "Pause" : "Run")) {
       runEmulation = !runEmulation;
     }
 
-    if (GuiButton((Rectangle){150, 220, 65, 30}, "Reset")) {
+    if (GuiButton((Rectangle){margin + 140, 220, 65, 30}, "Reset")) {
       runEmulation = false;
       // Reset sound
       soundRegL = 0;
@@ -794,38 +818,11 @@ int main(int argc, char *argv[]) {
       cpu_reset(&cpu);
     }
 
-    GuiLabel((Rectangle){10, 245, 220, 20}, "In:$00FF Snd:$E001 Vid:$2000");
+    GuiLabel((Rectangle){margin, 245, 220, 20}, "In:$00FF Snd:$E001 Vid:$2000");
 
-    // --- Disassembly View ---
-    GuiPanel((Rectangle){10, 260, 220, 200}, "Disassembly");
-
-    uint16_t pc = cpu.pc;
-    for (int i = 0; i < 16; i++) {
-      int y = 290 + i * 20;
-      if (y > 450)
-        break;
-
-      const char *asmStr = Disassemble(&cpu, pc);
-
-      // Breakpoint Toggle
-      bool isBp = breakpoints[pc];
-      if (GuiCheckBox((Rectangle){10, y, 15, 15}, "", &isBp)) {
-        breakpoints[pc] = isBp;
-      }
-
-      Color textColor = DARKGRAY;
-      if (i == 0) {
-        textColor = RED;
-      }
-      if (breakpoints[pc])
-        textColor = BLUE;
-
-      DrawText(TextFormat("$%04X: %s", pc, asmStr), 30, y, 10, textColor);
-      pc += GetInstructionLength(cpu.memory[pc]);
-    }
-
-    // --- Stack View ---
-    GuiPanel((Rectangle){10, 470, 220, 120}, "Stack (Page 1)");
+    // --- Stack View (Bottom Left) ---
+    Rectangle stackRect = {margin, scrH - margin - 120, sidebarW, 120};
+    GuiPanel(stackRect, "Stack (Page 1)");
     for (int i = 0; i < 5; i++) {
       uint8_t offset = cpu.sp + i;
       int addr = 0x0100 + offset;
@@ -837,27 +834,61 @@ int main(int argc, char *argv[]) {
         col = RED; // Highlight SP
         prefix = "SP>";
       }
-      DrawText(TextFormat("%s $%04X: %02X", prefix, addr, val), 20,
-               500 + i * 18, 10, col);
+      DrawText(TextFormat("%s $%04X: %02X", prefix, addr, val),
+               (int)stackRect.x + 10, (int)stackRect.y + 30 + i * 18, 10, col);
+    }
+
+    // --- Disassembly View ---
+    float disasmY = 260;
+    float disasmH = stackRect.y - margin - disasmY;
+    Rectangle disasmRect = {margin, disasmY, sidebarW, disasmH};
+    GuiPanel(disasmRect, "Disassembly");
+
+    uint16_t pc = cpu.pc;
+    int maxDisasmLines = (int)((disasmRect.height - 30) / 20);
+    for (int i = 0; i < maxDisasmLines; i++) {
+      int y = (int)disasmRect.y + 30 + i * 20;
+
+      const char *asmStr = Disassemble(&cpu, pc);
+
+      // Breakpoint Toggle
+      bool isBp = breakpoints[pc];
+      if (GuiCheckBox((Rectangle){disasmRect.x + 5, (float)y, 15, 15}, "",
+                      &isBp)) {
+        breakpoints[pc] = isBp;
+      }
+
+      Color textColor = DARKGRAY;
+      if (i == 0) {
+        textColor = RED;
+      }
+      if (breakpoints[pc])
+        textColor = BLUE;
+
+      DrawText(TextFormat("$%04X: %s", pc, asmStr), (int)disasmRect.x + 25, y,
+               10, textColor);
+      pc += GetInstructionLength(cpu.memory[pc]);
     }
 
     // --- Memory Hex Editor ---
-    GuiPanel((Rectangle){240, 10, 550, 400},
-             showGraphics ? "Graphics Mode ($2000)" : "Memory View");
+    Rectangle memRect = {rightX, margin, rightW, mainH};
+    GuiPanel(memRect, showGraphics ? "Graphics Mode ($2000)" : "Memory View");
 
-    if (GuiButton((Rectangle){680, 15, 100, 20},
+    if (GuiButton((Rectangle){memRect.x + memRect.width - 110, memRect.y + 5,
+                              100, 20},
                   showGraphics ? "Show Hex" : "Show Screen")) {
       showGraphics = !showGraphics;
     }
 
     // Navigation Controls
-    if (GuiButton((Rectangle){250, 35, 30, 25}, "<"))
+    if (GuiButton((Rectangle){memRect.x + 10, memRect.y + 25, 30, 25}, "<"))
       memStart -= 0x100;
-    if (GuiButton((Rectangle){285, 35, 30, 25}, ">"))
+    if (GuiButton((Rectangle){memRect.x + 45, memRect.y + 25, 30, 25}, ">"))
       memStart += 0x100;
 
-    GuiLabel((Rectangle){330, 35, 40, 25}, "Addr:");
-    if (GuiTextBox((Rectangle){370, 35, 60, 25}, addrBuffer, 5, editAddrMode)) {
+    GuiLabel((Rectangle){memRect.x + 90, memRect.y + 25, 40, 25}, "Addr:");
+    if (GuiTextBox((Rectangle){memRect.x + 130, memRect.y + 25, 60, 25},
+                   addrBuffer, 5, editAddrMode)) {
       editAddrMode = !editAddrMode;
       if (!editAddrMode) {
         memStart = (int)strtol(addrBuffer, NULL, 16);
@@ -872,12 +903,13 @@ int main(int argc, char *argv[]) {
       memStart = MEM_SIZE - 1;
 
     // Draw Hex Grid
-    int startY = 110;
-    int startX = 250;
+    int startY = (int)memRect.y + 100;
+    int startX = (int)memRect.x + 10;
 
     if (showGraphics) {
       int scale = 8;
-      int imgX = 240 + (550 - 32 * scale) / 2; // Center in panel
+      int imgX = (int)(memRect.x +
+                       (memRect.width - 32 * scale) / 2); // Center in panel
 
       for (int y = 0; y < 32; y++) {
         for (int x = 0; x < 32; x++) {
@@ -889,7 +921,8 @@ int main(int argc, char *argv[]) {
       }
       DrawRectangleLines(imgX, startY, 32 * scale, 32 * scale, BLACK);
     } else {
-      for (int row = 0; row < 14; row++) {
+      int maxRows = (int)((memRect.height - 100) / 20);
+      for (int row = 0; row < maxRows; row++) {
         int rowAddr = memStart + row * 16;
         if (rowAddr >= MEM_SIZE)
           break;
@@ -925,17 +958,19 @@ int main(int argc, char *argv[]) {
 
     // Draw ROM Write Warning
     if (showRomWriteWarning) {
-      DrawText("ROM WRITE ATTEMPT!", 520, 425, 20, RED);
+      DrawText("ROM WRITE ATTEMPT!", (int)(memRect.x + memRect.width / 2 - 100),
+               (int)(memRect.y + memRect.height - 30), 20, RED);
     }
 
     // --- File Loader ---
-    GuiLabel((Rectangle){250, 70, 60, 25}, "Load Bin:");
-    if (GuiTextBox((Rectangle){310, 70, 150, 25}, fileBuffer, 64,
-                   editFileMode)) {
+    GuiLabel((Rectangle){memRect.x + 10, memRect.y + 60, 60, 25}, "Load Bin:");
+    if (GuiTextBox((Rectangle){memRect.x + 70, memRect.y + 60, 150, 25},
+                   fileBuffer, 64, editFileMode)) {
       editFileMode = !editFileMode;
     }
 
-    if (GuiButton((Rectangle){470, 70, 50, 25}, "Load")) {
+    if (GuiButton((Rectangle){memRect.x + 230, memRect.y + 60, 50, 25},
+                  "Load")) {
       FILE *f = fopen(fileBuffer, "rb");
       if (f) {
         // Load at current memory view address (or fixed 0x0000/0x8000 depending
@@ -947,49 +982,60 @@ int main(int argc, char *argv[]) {
         snprintf(statusMsg, 64, "Failed to open!");
       }
     }
-    if (GuiButton((Rectangle){525, 70, 25, 25}, "...")) {
+    if (GuiButton((Rectangle){memRect.x + 285, memRect.y + 60, 25, 25},
+                  "...")) {
       OpenFileDialog();
     }
 
-    GuiLabel((Rectangle){560, 70, 180, 25}, statusMsg);
+    GuiLabel((Rectangle){memRect.x + 320, memRect.y + 60, 180, 25}, statusMsg);
 
     // --- Snapshots ---
-    if (GuiButton((Rectangle){650, 70, 60, 25}, "Save")) {
+    if (GuiButton((Rectangle){memRect.x + 410, memRect.y + 60, 60, 25},
+                  "Save")) {
       SaveSnapshot(&cpu, "snapshot.sav");
       snprintf(statusMsg, 64, "Saved snapshot.sav");
     }
-    if (GuiButton((Rectangle){715, 70, 60, 25}, "Load")) {
+    if (GuiButton((Rectangle){memRect.x + 475, memRect.y + 60, 60, 25},
+                  "Load")) {
       LoadSnapshot(&cpu, "snapshot.sav");
       snprintf(statusMsg, 64, "Loaded snapshot.sav");
     }
 
     // --- Bottom Panel (Console / Assembler) ---
+    float tabY = margin + mainH + 5;
+    Rectangle bottomRect = {rightX, tabY + 25, rightW, bottomH};
+
     // Tabs
-    if (GuiButton((Rectangle){240, 420, 80, 20}, "Console"))
+    if (GuiButton((Rectangle){rightX, tabY, 80, 20}, "Console"))
       bottomTab = 0;
-    if (GuiButton((Rectangle){325, 420, 80, 20}, "Assembler"))
+    if (GuiButton((Rectangle){rightX + 85, tabY, 80, 20}, "Assembler"))
       bottomTab = 1;
-    if (GuiButton((Rectangle){410, 420, 80, 20}, "Profiler"))
+    if (GuiButton((Rectangle){rightX + 170, tabY, 80, 20}, "Profiler"))
       bottomTab = 2;
 
     if (bottomTab == 0) {
-      GuiPanel((Rectangle){240, 440, 550, 150}, "Console Log ($E000)");
-      GuiDrawText(consoleBuffer, (Rectangle){250, 460, 530, 120},
+      GuiPanel(bottomRect, "Console Log ($E000)");
+      GuiDrawText(consoleBuffer,
+                  (Rectangle){bottomRect.x + 10, bottomRect.y + 20,
+                              bottomRect.width - 20, bottomRect.height - 30},
                   TEXT_ALIGN_LEFT, DARKGRAY);
     } else if (bottomTab == 1) {
-      GuiPanel((Rectangle){240, 440, 550, 150},
-               "Simple Assembler (Start: $0600)");
-      if (GuiTextBox((Rectangle){250, 460, 400, 120}, asmSource, 1024,
-                     editAsm)) {
+      GuiPanel(bottomRect, "Simple Assembler (Start: $0600)");
+      if (GuiTextBox((Rectangle){bottomRect.x + 10, bottomRect.y + 20,
+                                 bottomRect.width - 150,
+                                 bottomRect.height - 30},
+                     asmSource, 1024, editAsm)) {
         editAsm = !editAsm;
       }
-      if (GuiButton((Rectangle){660, 460, 120, 30}, "Compile")) {
+      if (GuiButton((Rectangle){bottomRect.x + bottomRect.width - 130,
+                                bottomRect.y + 20, 120, 30},
+                    "Compile")) {
         SimpleAssemble(&cpu, asmSource);
         snprintf(statusMsg, 64, "Assembled to $0600");
         cpu.pc = 0x0600; // Auto-jump to start
       }
     } else if (bottomTab == 2) {
-      GuiPanel((Rectangle){240, 440, 550, 150}, "Profiler Stats");
+      GuiPanel(bottomRect, "Profiler Stats");
 
       // Calculate stats
       uint64_t totalInstructions = 0;
@@ -997,9 +1043,9 @@ int main(int argc, char *argv[]) {
         totalInstructions += cpu.instruction_counts[i];
       }
 
-      GuiLabel((Rectangle){250, 460, 200, 20},
+      GuiLabel((Rectangle){bottomRect.x + 10, bottomRect.y + 20, 200, 20},
                TextFormat("Total Instr: %llu", totalInstructions));
-      GuiLabel((Rectangle){450, 460, 200, 20},
+      GuiLabel((Rectangle){bottomRect.x + 210, bottomRect.y + 20, 200, 20},
                TextFormat("Cycles/Frame: %d", cyclesThisFrame));
 
       // Find top 5 instructions
@@ -1030,20 +1076,23 @@ int main(int argc, char *argv[]) {
                                ? (float)count / (float)totalInstructions
                                : 0.0f;
 
-        DrawRectangle(250, 490 + i * 22, (int)(percentage * 300), 18, BLUE);
+        DrawRectangle((int)bottomRect.x + 10, (int)bottomRect.y + 50 + i * 22,
+                      (int)(percentage * 300), 18, BLUE);
         DrawText(TextFormat("$%02X: %llu (%.1f%%)", opcode, count,
                             percentage * 100.0f),
-                 255, 490 + i * 22 + 2, 10, WHITE);
+                 (int)bottomRect.x + 15, (int)bottomRect.y + 50 + i * 22 + 2,
+                 10, WHITE);
       }
     }
 
     // --- File Dialog Overlay ---
     if (fileDialog.active) {
       GuiUnlock();
-      DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.5f));
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                    Fade(BLACK, 0.5f));
 
-      Rectangle winBounds = {(float)SCREEN_WIDTH / 2 - 200,
-                             (float)SCREEN_HEIGHT / 2 - 150, 400, 300};
+      Rectangle winBounds = {(float)GetScreenWidth() / 2 - 200,
+                             (float)GetScreenHeight() / 2 - 150, 400, 300};
       if (GuiWindowBox(winBounds, "Select File"))
         CloseFileDialog();
 

@@ -27,7 +27,7 @@
 			"compiler" : 
 			{
 				"implicit" : {},
-				"path" : "C:/Program Files/LLVM/bin/clang-cl.exe"
+				"path" : "clang-cl"
 			},
 			"language" : "CXX"
 		},

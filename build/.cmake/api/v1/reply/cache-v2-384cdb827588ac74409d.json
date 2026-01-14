@@ -159,11 +159,11 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "CXX compiler"
+					"value" : "No help, variable specified on the command line."
 				}
 			],
-			"type" : "STRING",
-			"value" : "C:/Program Files/LLVM/bin/clang-cl.exe"
+			"type" : "UNINITIALIZED",
+			"value" : "clang-cl"
 		},
 		{
 			"name" : "CMAKE_CXX_COMPILER_AR",

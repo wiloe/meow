@@ -21,9 +21,32 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+# --- ROM Generator ---
+add_executable(rom_gen rom_generator.c)
+
+# Run the generator to create rom.bin in the source directory
+add_custom_command(
+    OUTPUT "${CMAKE_SOURCE_DIR}/rom.bin"
+    COMMAND $<TARGET_FILE:rom_gen>
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    DEPENDS rom_gen
+    COMMENT "Generating rom.bin"
+)
+add_custom_target(gen_rom_file ALL DEPENDS "${CMAKE_SOURCE_DIR}/rom.bin")
+
 add_executable(emu6502 main.c cpu.c)
 
 if(WIN32)
     # Link against the 'raylib' target defined by add_subdirectory
     target_link_libraries(emu6502 PRIVATE raylib gdi32 winmm user32 shell32)
 endif()
+
+add_dependencies(emu6502 gen_rom_file)
+
+# Copy rom.bin to the build directory after build
+add_custom_command(TARGET emu6502 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_SOURCE_DIR}/rom.bin"
+    "$<TARGET_FILE_DIR:emu6502>"
+    COMMENT "Copying rom.bin to output directory"
+)

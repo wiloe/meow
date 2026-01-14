@@ -15,6 +15,7 @@
 		[
 			"add_executable",
 			"target_link_libraries",
+			"add_dependencies",
 			"add_compile_definitions"
 		],
 		"files" : 
@@ -30,13 +31,13 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 24,
+				"line" : 37,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 28,
+				"line" : 41,
 				"parent" : 0
 			},
 			{
@@ -50,6 +51,12 @@
 			},
 			{
 				"command" : 2,
+				"file" : 0,
+				"line" : 44,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
 				"file" : 0,
 				"line" : 7,
 				"parent" : 0
@@ -76,7 +83,7 @@
 					"define" : "PLATFORM_DESKTOP"
 				},
 				{
-					"backtrace" : 5,
+					"backtrace" : 6,
 					"define" : "_CRT_SECURE_NO_WARNINGS"
 				}
 			],
@@ -112,6 +119,10 @@
 		{
 			"backtrace" : 2,
 			"id" : "glfw::@9de86fbe87260ae8e66c"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "gen_rom_file::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "emu6502::@6890427a1f51a3e7e1df",

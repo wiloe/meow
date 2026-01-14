@@ -69,7 +69,7 @@
 				"_deps/raylib-build/raylib/raylib.lib"
 			],
 			"targetId" : "raylib::@4dc3a4644cf4ded08c01",
-			"targetIndex" : 2,
+			"targetIndex" : 3,
 			"type" : "target"
 		},
 		{
@@ -125,7 +125,7 @@
 			[
 				{
 					"id" : "raylib::@4dc3a4644cf4ded08c01",
-					"index" : 2
+					"index" : 3
 				}
 			],
 			"paths" : 
