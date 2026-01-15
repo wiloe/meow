@@ -5,12 +5,15 @@
 #include <string.h> // Required for strtok, strncpy
 
 #define RAYGUI_IMPLEMENTATION
-#include "raygui.h"
+// #include "raygui.h"
+#include "meowgui.h"
 
 #include "cpu.h"
+#include "debugger.h"
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
+#define APP_VERSION "0.1.0"
 
 // Simple 16-color palette (C64 style)
 static const Color PALETTE[16] = {
@@ -32,320 +35,6 @@ static const Color PALETTE[16] = {
     {187, 187, 187, 255}  // 15: Light Grey
 };
 
-int GetInstructionLength(uint8_t opcode) {
-  switch (opcode) {
-  case 0x0A:
-  case 0x4A:
-  case 0x2A:
-  case 0x6A: // Acc shifts
-  case 0x60: // RTS
-  case 0xBA:
-  case 0x9A: // TSX, TXS
-  case 0x18: // CLC
-  case 0x38: // SEC
-  case 0x58: // CLI
-  case 0x78: // SEI
-  case 0xB8: // CLV
-  case 0xD8: // CLD
-  case 0xF8: // SED
-  case 0x40: // RTI
-    return 1;
-  case 0xA9:
-  case 0xA2:
-  case 0xA0:
-  case 0xD0:
-  case 0xF0:
-  case 0x10:
-  case 0x30:
-  case 0x90: // BCC
-  case 0xB0: // BCS
-  case 0x50: // BVC
-  case 0x70: // BVS
-  case 0x69:
-  case 0xE9:
-  case 0x29:
-  case 0x09:
-  case 0x49:
-  case 0xE6:
-  case 0xC6:
-  case 0xF6: // INC ZP,X
-  case 0xD6: // DEC ZP,X
-  case 0xA5:
-  case 0xB5:
-  case 0xA1:
-  case 0xB1: // LDA ZP/Ind
-  case 0x85:
-  case 0x95:
-  case 0x81:
-  case 0x91: // STA ZP/Ind
-  case 0xA6:
-  case 0xB6: // LDX ZP
-  case 0xA4:
-  case 0xB4: // LDY ZP
-  case 0x86:
-  case 0x96: // STX ZP
-  case 0x84:
-  case 0x94: // STY ZP
-  case 0x06:
-  case 0x16:
-  case 0x46:
-  case 0x56:
-  case 0x26:
-  case 0x36:
-  case 0x66:
-  case 0x76: // ZP shifts
-  case 0xC9:
-  case 0xC5:
-  case 0xD5:
-  case 0xC1:
-  case 0xD1: // CMP
-  case 0xE0:
-  case 0xE4: // CPX
-  case 0xC0:
-  case 0xC4: // CPY
-  case 0x24: // BIT ZP
-    return 2;
-  case 0xEE:
-  case 0xCE:
-  case 0xFE: // INC Abs,X
-  case 0xDE: // DEC Abs,X
-  case 0xAD:
-  case 0xBD:
-  case 0xB9: // LDA Abs
-  case 0x8D:
-  case 0x9D:
-  case 0x99: // STA Abs
-  case 0xAE:
-  case 0xBE: // LDX Abs
-  case 0xAC:
-  case 0xBC: // LDY Abs
-  case 0x8E: // STX Abs
-  case 0x8C: // STY Abs
-  case 0x4C:
-  case 0x6C: // JMP
-  case 0x20: // JSR
-  case 0x0E:
-  case 0x1E:
-  case 0x4E:
-  case 0x5E:
-  case 0x2E:
-  case 0x3E:
-  case 0x6E:
-  case 0x7E: // Abs shifts
-  case 0xCD:
-  case 0xDD:
-  case 0xD9: // CMP Abs
-  case 0xEC: // CPX Abs
-  case 0xCC: // CPY Abs
-  case 0x2C: // BIT Abs
-    return 3;
-  default:
-    return 1;
-  }
-}
-
-const char *Disassemble(CPU *cpu, uint16_t addr) {
-  uint8_t opcode = cpu->memory[addr];
-  uint8_t operand = cpu->memory[(addr + 1) & 0xFFFF];
-  uint8_t operand2 = cpu->memory[(addr + 2) & 0xFFFF];
-  switch (opcode) {
-  case 0x00:
-    return "BRK";
-  case 0xA9:
-    return TextFormat("LDA #$%02X", operand);
-  case 0xA5:
-    return TextFormat("LDA $%02X", operand);
-  case 0xB5:
-    return TextFormat("LDA $%02X,X", operand);
-  case 0xAD:
-    return TextFormat("LDA $%04X", (operand2 << 8) | operand);
-  case 0xBD:
-    return TextFormat("LDA $%04X,X", (operand2 << 8) | operand);
-  case 0xB9:
-    return TextFormat("LDA $%04X,Y", (operand2 << 8) | operand);
-  case 0xA1:
-    return TextFormat("LDA ($%02X,X)", operand);
-  case 0xB1:
-    return TextFormat("LDA ($%02X),Y", operand);
-  case 0xA2:
-    return TextFormat("LDX #$%02X", operand);
-  case 0xA6:
-    return TextFormat("LDX $%02X", operand);
-  case 0xB6:
-    return TextFormat("LDX $%02X,Y", operand);
-  case 0xAE:
-    return TextFormat("LDX $%04X", (operand2 << 8) | operand);
-  case 0xBE:
-    return TextFormat("LDX $%04X,Y", (operand2 << 8) | operand);
-  case 0xA0:
-    return TextFormat("LDY #$%02X", operand);
-  case 0xA4:
-    return TextFormat("LDY $%02X", operand);
-  case 0xB4:
-    return TextFormat("LDY $%02X,X", operand);
-  case 0xAC:
-    return TextFormat("LDY $%04X", (operand2 << 8) | operand);
-  case 0xBC:
-    return TextFormat("LDY $%04X,X", (operand2 << 8) | operand);
-  case 0x85:
-    return TextFormat("STA $%02X", operand);
-  case 0x95:
-    return TextFormat("STA $%02X,X", operand);
-  case 0x8D:
-    return TextFormat("STA $%04X", (operand2 << 8) | operand);
-  case 0x9D:
-    return TextFormat("STA $%04X,X", (operand2 << 8) | operand);
-  case 0x99:
-    return TextFormat("STA $%04X,Y", (operand2 << 8) | operand);
-  case 0x81:
-    return TextFormat("STA ($%02X,X)", operand);
-  case 0x91:
-    return TextFormat("STA ($%02X),Y", operand);
-  case 0x86:
-    return TextFormat("STX $%02X", operand);
-  case 0x96:
-    return TextFormat("STX $%02X,Y", operand);
-  case 0x8E:
-    return TextFormat("STX $%04X", (operand2 << 8) | operand);
-  case 0x84:
-    return TextFormat("STY $%02X", operand);
-  case 0x94:
-    return TextFormat("STY $%02X,X", operand);
-  case 0x8C:
-    return TextFormat("STY $%04X", (operand2 << 8) | operand);
-  case 0x4C:
-    return TextFormat("JMP $%04X", (operand2 << 8) | operand);
-  case 0x6C:
-    return TextFormat("JMP ($%04X)", (operand2 << 8) | operand);
-  case 0x20:
-    return TextFormat("JSR $%04X", (operand2 << 8) | operand);
-  case 0x60:
-    return "RTS";
-  case 0xBA:
-    return "TSX";
-  case 0x9A:
-    return "TXS";
-  case 0x0A:
-    return "ASL A";
-  case 0x06:
-    return TextFormat("ASL $%02X", operand);
-  case 0x16:
-    return TextFormat("ASL $%02X,X", operand);
-  case 0x0E:
-    return TextFormat("ASL $%04X", (operand2 << 8) | operand);
-  case 0x1E:
-    return TextFormat("ASL $%04X,X", (operand2 << 8) | operand);
-  case 0x4A:
-    return "LSR A";
-  case 0x46:
-    return TextFormat("LSR $%02X", operand);
-  case 0x56:
-    return TextFormat("LSR $%02X,X", operand);
-  case 0x4E:
-    return TextFormat("LSR $%04X", (operand2 << 8) | operand);
-  case 0x5E:
-    return TextFormat("LSR $%04X,X", (operand2 << 8) | operand);
-  case 0x2A:
-    return "ROL A";
-  case 0x26:
-    return TextFormat("ROL $%02X", operand);
-  case 0x36:
-    return TextFormat("ROL $%02X,X", operand);
-  case 0x2E:
-    return TextFormat("ROL $%04X", (operand2 << 8) | operand);
-  case 0x3E:
-    return TextFormat("ROL $%04X,X", (operand2 << 8) | operand);
-  case 0x6A:
-    return "ROR A";
-  case 0x66:
-    return TextFormat("ROR $%02X", operand);
-  case 0x76:
-    return TextFormat("ROR $%02X,X", operand);
-  case 0x6E:
-    return TextFormat("ROR $%04X", (operand2 << 8) | operand);
-  case 0x7E:
-    return TextFormat("ROR $%04X,X", (operand2 << 8) | operand);
-  case 0x48:
-    return "PHA";
-  case 0x08:
-    return "PHP";
-  case 0x68:
-    return "PLA";
-  case 0x28:
-    return "PLP";
-  case 0xD0:
-    return TextFormat("BNE $%02X", operand);
-  case 0xF0:
-    return TextFormat("BEQ $%02X", operand);
-  case 0x10:
-    return TextFormat("BPL $%02X", operand);
-  case 0x30:
-    return TextFormat("BMI $%02X", operand);
-  case 0x90:
-    return TextFormat("BCC $%02X", operand);
-  case 0xB0:
-    return TextFormat("BCS $%02X", operand);
-  case 0x50:
-    return TextFormat("BVC $%02X", operand);
-  case 0x70:
-    return TextFormat("BVS $%02X", operand);
-  case 0x69:
-    return TextFormat("ADC #$%02X", operand);
-  case 0xE9:
-    return TextFormat("SBC #$%02X", operand);
-  case 0x29:
-    return TextFormat("AND #$%02X", operand);
-  case 0x09:
-    return TextFormat("ORA #$%02X", operand);
-  case 0x49:
-    return TextFormat("EOR #$%02X", operand);
-  case 0xE6:
-    return TextFormat("INC $%02X", operand);
-  case 0xEE:
-    return TextFormat("INC $%04X", (operand2 << 8) | operand);
-  case 0xF6:
-    return TextFormat("INC $%02X,X", operand);
-  case 0xFE:
-    return TextFormat("INC $%04X,X", (operand2 << 8) | operand);
-  case 0xC6:
-    return TextFormat("DEC $%02X", operand);
-  case 0xCE:
-    return TextFormat("DEC $%04X", (operand2 << 8) | operand);
-  case 0xD6:
-    return TextFormat("DEC $%02X,X", operand);
-  case 0xDE:
-    return TextFormat("DEC $%04X,X", (operand2 << 8) | operand);
-  case 0xE8:
-    return "INX";
-  case 0xCA:
-    return "DEX";
-  case 0xC8:
-    return "INY";
-  case 0x88:
-    return "DEY";
-  case 0x18:
-    return "CLC";
-  case 0x38:
-    return "SEC";
-  case 0x58:
-    return "CLI";
-  case 0x78:
-    return "SEI";
-  case 0xB8:
-    return "CLV";
-  case 0xD8:
-    return "CLD";
-  case 0xF8:
-    return "SED";
-  case 0x40:
-    return "RTI";
-  case 0xEA:
-    return "NOP";
-  default:
-    return TextFormat("??? ($%02X)", opcode);
-  }
-}
-
 // Console Log State
 char consoleBuffer[4096] = {0};
 int consoleIndex = 0;
@@ -353,6 +42,31 @@ int consoleIndex = 0;
 // ROM Write Warning State
 bool showRomWriteWarning = false;
 int romWriteWarningTimer = 0;
+
+// Manual Text
+const char *MANUAL_TEXT = "6502 ASSEMBLY MANUAL\n"
+                          "--------------------\n\n"
+                          "ADDRESSING MODES:\n"
+                          "  Immediate:   LDA #$01    (Value 0x01)\n"
+                          "  Zero Page:   LDA $01     (Mem 0x0001)\n"
+                          "  Absolute:    LDA $0200   (Mem 0x0200)\n"
+                          "  Indexed:     LDA $0200,X (Mem 0x0200 + X)\n\n"
+                          "COMMON OPCODES:\n"
+                          "  LDA/LDX/LDY  Load Register (A, X, Y)\n"
+                          "  STA/STX/STY  Store Register (A, X, Y)\n"
+                          "  ADC          Add with Carry\n"
+                          "  SBC          Subtract with Carry\n"
+                          "  INC/DEC      Increment/Decrement\n"
+                          "  INX/DEX      Increment/Decrement X\n"
+                          "  INY/DEY      Increment/Decrement Y\n"
+                          "  JMP          Jump to Address\n"
+                          "  JSR          Jump to Subroutine\n"
+                          "  RTS          Return from Subroutine\n"
+                          "  CMP/CPX/CPY  Compare Register\n"
+                          "  BNE          Branch if Not Equal (Z=0)\n"
+                          "  BEQ          Branch if Equal (Z=1)\n"
+                          "  BCC          Branch if Carry Clear\n"
+                          "  BCS          Branch if Carry Set\n";
 
 // --- File Dialog ---
 typedef struct {
@@ -498,110 +212,30 @@ void LoadSnapshot(CPU *cpu, const char *filename) {
   fclose(f);
 }
 
-void SimpleAssemble(CPU *cpu, const char *source) {
-  char buffer[1024];
-  strncpy(buffer, source, sizeof(buffer));
-  buffer[sizeof(buffer) - 1] = 0;
-
-  uint16_t pc = 0x0600; // Assemble to $0600
-
-  char *line = strtok(buffer, "\n");
-  while (line) {
-    char mnemonic[16] = {0};
-    char operand[16] = {0};
-    int args = sscanf(line, "%s %s", mnemonic, operand);
-
-    if (args > 0) {
-      // ToUpper
-      for (int i = 0; mnemonic[i]; i++)
-        if (mnemonic[i] >= 'a' && mnemonic[i] <= 'z')
-          mnemonic[i] -= 32;
-
-      uint8_t opcode = 0;
-      int val = 0;
-      int len = 0;
-
-      if (strcmp(mnemonic, "LDA") == 0) {
-        if (operand[0] == '#') {
-          opcode = 0xA9;
-          len = 2;
-          sscanf(operand, "#$%x", &val);
-        } else {
-          opcode = 0xAD;
-          len = 3;
-          sscanf(operand, "$%x", &val);
-        }
-      } else if (strcmp(mnemonic, "STA") == 0) {
-        opcode = 0x8D;
-        len = 3;
-        sscanf(operand, "$%x", &val);
-      } else if (strcmp(mnemonic, "LDX") == 0) {
-        if (operand[0] == '#') {
-          opcode = 0xA2;
-          len = 2;
-          sscanf(operand, "#$%x", &val);
-        } else {
-          opcode = 0xAE;
-          len = 3;
-          sscanf(operand, "$%x", &val);
-        }
-      } else if (strcmp(mnemonic, "LDY") == 0) {
-        if (operand[0] == '#') {
-          opcode = 0xA0;
-          len = 2;
-          sscanf(operand, "#$%x", &val);
-        } else {
-          opcode = 0xAC;
-          len = 3;
-          sscanf(operand, "$%x", &val);
-        }
-      } else if (strcmp(mnemonic, "JMP") == 0) {
-        opcode = 0x4C;
-        len = 3;
-        sscanf(operand, "$%x", &val);
-      } else if (strcmp(mnemonic, "RTS") == 0) {
-        opcode = 0x60;
-        len = 1;
-      } else if (strcmp(mnemonic, "NOP") == 0) {
-        opcode = 0xEA;
-        len = 1;
-      }
-
-      if (opcode) {
-        cpu->memory[pc++] = opcode;
-        if (len > 1)
-          cpu->memory[pc++] = val & 0xFF;
-        if (len > 2)
-          cpu->memory[pc++] = (val >> 8) & 0xFF;
-      }
-    }
-    line = strtok(NULL, "\n");
-  }
-}
-
 void SetCustomStyle() {
   // Dark Theme Example
-  GuiSetStyle(DEFAULT, BACKGROUND_COLOR, 0x2D2D2DFF);
-  GuiSetStyle(DEFAULT, LINE_COLOR, 0x636363FF);
-  GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, 0xDEDEDEFF);
-  GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED, 0x87CFFFFF);
-  GuiSetStyle(DEFAULT, TEXT_COLOR_PRESSED, 0x0492C7FF);
-  GuiSetStyle(DEFAULT, TEXT_COLOR_DISABLED, 0x7C7C7CFF);
+  GuiSetStyle(DEFAULT, BACKGROUND_COLOR, (int)0x2D2D2DFF);
+  GuiSetStyle(DEFAULT, LINE_COLOR, (int)0x636363FF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, (int)0xDEDEDEFF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED, (int)0x87CFFFFF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_PRESSED, (int)0x0492C7FF);
+  GuiSetStyle(DEFAULT, TEXT_COLOR_DISABLED, (int)0x7C7C7CFF);
 
-  GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, 0x454545FF);
-  GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, 0x5BB2D9FF);
-  GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, 0x0492C7FF);
-  GuiSetStyle(DEFAULT, BORDER_COLOR_DISABLED, 0x454545FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, (int)0x454545FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, (int)0x5BB2D9FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, (int)0x0492C7FF);
+  GuiSetStyle(DEFAULT, BORDER_COLOR_DISABLED, (int)0x454545FF);
 
-  GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, 0x454545FF);
-  GuiSetStyle(DEFAULT, BASE_COLOR_FOCUSED, 0x454545FF);
-  GuiSetStyle(DEFAULT, BASE_COLOR_PRESSED, 0x323232FF);
-  GuiSetStyle(DEFAULT, BASE_COLOR_DISABLED, 0x2D2D2DFF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, (int)0x454545FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_FOCUSED, (int)0x454545FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_PRESSED, (int)0x323232FF);
+  GuiSetStyle(DEFAULT, BASE_COLOR_DISABLED, (int)0x2D2D2DFF);
 }
 
 int main(int argc, char *argv[]) {
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "6502 Emulator (C + Raylib)");
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
+             "6502 Emulator (C + Raylib) v" APP_VERSION);
   MaximizeWindow();
   SetTargetFPS(60);
 
@@ -691,6 +325,12 @@ int main(int argc, char *argv[]) {
   char asmSource[1024] = "LDA #$01\nSTA $0200\nRTS";
   bool editAsm = false;
 
+  // Menu Bar State
+  bool menuFileActive = false;
+  bool menuEmulationActive = false;
+  bool menuHelpActive = false;
+  bool showManual = false;
+
   while (!WindowShouldClose()) {
     // Update
     int cyclesThisFrame = 0;
@@ -733,100 +373,49 @@ int main(int argc, char *argv[]) {
     float scrW = (float)GetScreenWidth();
     float scrH = (float)GetScreenHeight();
     float margin = 10;
+    float menuBarHeight = 30;
+    float topY = margin + menuBarHeight; // Shift everything down
+
     float sidebarW = 220;
     float rightX = margin + sidebarW + margin;
     float rightW = scrW - rightX - margin;
     float bottomH = 180;
     float tabH = 25;
-    float mainH = scrH - margin - margin - bottomH - tabH;
+    float mainH = scrH - topY - margin - bottomH - tabH;
     if (mainH < 200)
       mainH = 200; // Minimum height safety
 
-    // Disable main UI if dialog is open
-    if (fileDialog.active)
-      GuiLock();
+    // --- Menu Bar ---
+    GuiPanel((Rectangle){0, 0, scrW, menuBarHeight}, NULL);
 
-    // --- CPU Status Panel ---
-    GuiPanel((Rectangle){margin, margin, sidebarW, 200}, "CPU Registers");
-
-    GuiLabel((Rectangle){margin + 15, 40, 30, 20}, "PC:");
-    if (!editPc)
-      snprintf(regPcBuf, 5, "%04X", cpu.pc);
-    if (GuiTextBox((Rectangle){margin + 45, 40, 60, 20}, regPcBuf, 5, editPc)) {
-      editPc = !editPc;
-      if (!editPc)
-        cpu.pc = (uint16_t)strtol(regPcBuf, NULL, 16);
+    // File Menu
+    if (GuiButton((Rectangle){5, 5, 50, 20}, "File")) {
+      menuFileActive = !menuFileActive;
+      menuEmulationActive = false;
+      menuHelpActive = false;
     }
 
-    GuiLabel((Rectangle){margin + 15, 65, 30, 20}, "A:");
-    if (!editA)
-      snprintf(regABuf, 3, "%02X", cpu.a);
-    if (GuiTextBox((Rectangle){margin + 45, 65, 40, 20}, regABuf, 3, editA)) {
-      editA = !editA;
-      if (!editA)
-        cpu.a = (uint8_t)strtol(regABuf, NULL, 16);
+    // Emulation Menu
+    if (GuiButton((Rectangle){60, 5, 70, 20}, "Emulation")) {
+      menuEmulationActive = !menuEmulationActive;
+      menuFileActive = false;
+      menuHelpActive = false;
     }
 
-    GuiLabel((Rectangle){margin + 15, 90, 30, 20}, "X:");
-    if (!editX)
-      snprintf(regXBuf, 3, "%02X", cpu.x);
-    if (GuiTextBox((Rectangle){margin + 45, 90, 40, 20}, regXBuf, 3, editX)) {
-      editX = !editX;
-      if (!editX)
-        cpu.x = (uint8_t)strtol(regXBuf, NULL, 16);
+    // Help Menu
+    if (GuiButton((Rectangle){135, 5, 50, 20}, "Help")) {
+      menuHelpActive = !menuHelpActive;
+      menuFileActive = false;
+      menuEmulationActive = false;
     }
 
-    GuiLabel((Rectangle){margin + 15, 115, 30, 20}, "Y:");
-    if (!editY)
-      snprintf(regYBuf, 3, "%02X", cpu.y);
-    if (GuiTextBox((Rectangle){margin + 45, 115, 40, 20}, regYBuf, 3, editY)) {
-      editY = !editY;
-      if (!editY)
-        cpu.y = (uint8_t)strtol(regYBuf, NULL, 16);
-    }
-
-    GuiLabel((Rectangle){margin + 15, 140, 30, 20}, "SP:");
-    if (!editSp)
-      snprintf(regSpBuf, 3, "%02X", cpu.sp);
-    if (GuiTextBox((Rectangle){margin + 45, 140, 40, 20}, regSpBuf, 3,
-                   editSp)) {
-      editSp = !editSp;
-      if (!editSp)
-        cpu.sp = (uint8_t)strtol(regSpBuf, NULL, 16);
-    }
-
-    // Flags visualization (NV-BDIZC)
-    GuiLabel(
-        (Rectangle){margin + 15, 165, 180, 20},
-        TextFormat(
-            "Flags: %c%c-%c%c%c%c%c", (cpu.status & 0x80) ? 'N' : '.',
-            (cpu.status & 0x40) ? 'V' : '.', (cpu.status & 0x10) ? 'B' : '.',
-            (cpu.status & 0x08) ? 'D' : '.', (cpu.status & 0x04) ? 'I' : '.',
-            (cpu.status & 0x02) ? 'Z' : '.', (cpu.status & 0x01) ? 'C' : '.'));
-
-    GuiLabel((Rectangle){margin + 15, 185, 180, 20},
-             TextFormat("FPS: %d  Speed: %.2f MHz", GetFPS(),
-                        (float)cyclesThisFrame * GetFPS() / 1000000.0f));
-
-    // --- Controls ---
-    if (GuiButton((Rectangle){margin, 220, 65, 30}, "Step")) {
+    // Toolbar Shortcuts
+    if (GuiButton((Rectangle){200, 5, 40, 20}, "Reset")) {
       runEmulation = false;
-      cpu_step(&cpu);
-    }
-    if (GuiButton((Rectangle){margin + 70, 220, 65, 30},
-                  runEmulation ? "Pause" : "Run")) {
-      runEmulation = !runEmulation;
-    }
-
-    if (GuiButton((Rectangle){margin + 140, 220, 65, 30}, "Reset")) {
-      runEmulation = false;
-      // Reset sound
       soundRegL = 0;
       soundRegH = 0;
       waveFrequency = 0.0f;
       waveVolume = 0.0f;
-
-      // Reload ROM
       FILE *f = fopen(fileBuffer, "rb");
       if (f) {
         fread(cpu.memory, 1, MEM_SIZE, f);
@@ -835,12 +424,91 @@ int main(int argc, char *argv[]) {
       } else {
         snprintf(statusMsg, 64, "Reset (No ROM)");
       }
-
-      // Reset CPU after reloading ROM
       cpu_reset(&cpu);
     }
 
-    GuiLabel((Rectangle){margin, 245, 220, 20}, "In:$00FF Snd:$E001 Vid:$2000");
+    if (GuiButton((Rectangle){245, 5, 40, 20},
+                  runEmulation ? "Pause" : "Run")) {
+      runEmulation = !runEmulation;
+    }
+
+    if (GuiButton((Rectangle){290, 5, 40, 20}, "Step")) {
+      runEmulation = false;
+      cpu_step(&cpu);
+    }
+
+    // Disable main UI if dialog is open
+    if (fileDialog.active)
+      GuiLock();
+
+    // --- CPU Status Panel ---
+    GuiPanel((Rectangle){margin, topY, sidebarW, 200}, "CPU Registers");
+
+    GuiLabel((Rectangle){margin + 15, topY + 30, 30, 20}, "PC:");
+    if (!editPc)
+      snprintf(regPcBuf, 5, "%04X", cpu.pc);
+    if (GuiTextBox((Rectangle){margin + 45, topY + 30, 60, 20}, regPcBuf, 5,
+                   editPc)) {
+      editPc = !editPc;
+      if (!editPc)
+        cpu.pc = (uint16_t)strtol(regPcBuf, NULL, 16);
+    }
+
+    GuiLabel((Rectangle){margin + 15, topY + 55, 30, 20}, "A:");
+    if (!editA)
+      snprintf(regABuf, 3, "%02X", cpu.a);
+    if (GuiTextBox((Rectangle){margin + 45, topY + 55, 40, 20}, regABuf, 3,
+                   editA)) {
+      editA = !editA;
+      if (!editA)
+        cpu.a = (uint8_t)strtol(regABuf, NULL, 16);
+    }
+
+    GuiLabel((Rectangle){margin + 15, topY + 80, 30, 20}, "X:");
+    if (!editX)
+      snprintf(regXBuf, 3, "%02X", cpu.x);
+    if (GuiTextBox((Rectangle){margin + 45, topY + 80, 40, 20}, regXBuf, 3,
+                   editX)) {
+      editX = !editX;
+      if (!editX)
+        cpu.x = (uint8_t)strtol(regXBuf, NULL, 16);
+    }
+
+    GuiLabel((Rectangle){margin + 15, topY + 105, 30, 20}, "Y:");
+    if (!editY)
+      snprintf(regYBuf, 3, "%02X", cpu.y);
+    if (GuiTextBox((Rectangle){margin + 45, topY + 105, 40, 20}, regYBuf, 3,
+                   editY)) {
+      editY = !editY;
+      if (!editY)
+        cpu.y = (uint8_t)strtol(regYBuf, NULL, 16);
+    }
+
+    GuiLabel((Rectangle){margin + 15, topY + 130, 30, 20}, "SP:");
+    if (!editSp)
+      snprintf(regSpBuf, 3, "%02X", cpu.sp);
+    if (GuiTextBox((Rectangle){margin + 45, topY + 130, 40, 20}, regSpBuf, 3,
+                   editSp)) {
+      editSp = !editSp;
+      if (!editSp)
+        cpu.sp = (uint8_t)strtol(regSpBuf, NULL, 16);
+    }
+
+    // Flags visualization (NV-BDIZC)
+    GuiLabel(
+        (Rectangle){margin + 15, topY + 155, 180, 20},
+        TextFormat(
+            "Flags: %c%c-%c%c%c%c%c", (cpu.status & 0x80) ? 'N' : '.',
+            (cpu.status & 0x40) ? 'V' : '.', (cpu.status & 0x10) ? 'B' : '.',
+            (cpu.status & 0x08) ? 'D' : '.', (cpu.status & 0x04) ? 'I' : '.',
+            (cpu.status & 0x02) ? 'Z' : '.', (cpu.status & 0x01) ? 'C' : '.'));
+
+    GuiLabel((Rectangle){margin + 15, topY + 175, 180, 20},
+             TextFormat("FPS: %d  Speed: %.2f MHz", GetFPS(),
+                        (float)cyclesThisFrame * GetFPS() / 1000000.0f));
+
+    GuiLabel((Rectangle){margin, topY + 205, 220, 20},
+             "In:$00FF Snd:$E001 Vid:$2000");
 
     // --- Stack View (Bottom Left) ---
     Rectangle stackRect = {margin, scrH - margin - 120, sidebarW, 120};
@@ -861,7 +529,7 @@ int main(int argc, char *argv[]) {
     }
 
     // --- Disassembly View ---
-    float disasmY = 260;
+    float disasmY = topY + 230;
     float disasmH = stackRect.y - margin - disasmY;
     Rectangle disasmRect = {margin, disasmY, sidebarW, disasmH};
     GuiPanel(disasmRect, "Disassembly");
@@ -893,7 +561,7 @@ int main(int argc, char *argv[]) {
     }
 
     // --- Memory Hex Editor ---
-    Rectangle memRect = {rightX, margin, rightW, mainH};
+    Rectangle memRect = {rightX, topY, rightW, mainH};
     GuiPanel(memRect, showGraphics ? "Graphics Mode ($2000)" : "Memory View");
 
     if (GuiButton((Rectangle){memRect.x + memRect.width - 110, memRect.y + 5,
@@ -1036,7 +704,7 @@ int main(int argc, char *argv[]) {
     }
 
     // --- Bottom Panel (Console / Assembler) ---
-    float tabY = margin + mainH + 5;
+    float tabY = topY + mainH + 5;
     Rectangle bottomRect = {rightX, tabY + 25, rightW, bottomH};
 
     // Tabs
@@ -1055,10 +723,10 @@ int main(int argc, char *argv[]) {
                   TEXT_ALIGN_LEFT, LIGHTGRAY);
     } else if (bottomTab == 1) {
       GuiPanel(bottomRect, "Simple Assembler (Start: $0600)");
-      if (GuiTextBox((Rectangle){bottomRect.x + 10, bottomRect.y + 20,
-                                 bottomRect.width - 150,
-                                 bottomRect.height - 30},
-                     asmSource, 1024, editAsm)) {
+      if (GuiTextBoxMulti(
+              (Rectangle){bottomRect.x + 10, bottomRect.y + 20,
+                          bottomRect.width - 150, bottomRect.height - 30},
+              asmSource, 1024, editAsm)) { // Use Multi-line text box
         editAsm = !editAsm;
       }
       if (GuiButton((Rectangle){bottomRect.x + bottomRect.width - 130,
@@ -1173,6 +841,80 @@ int main(int argc, char *argv[]) {
                     "Cancel")) {
         CloseFileDialog();
       }
+    }
+
+    // --- Draw Pop-up Menus (Last for Z-order) ---
+    if (menuFileActive) {
+      Rectangle menuBounds = {5, 30, 120, 100};
+      GuiUnlock(); // Ensure menu is clickable
+      GuiPanel(menuBounds, NULL);
+      if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 5, 110, 25},
+                    "Load ROM...")) {
+        OpenFileDialog();
+        menuFileActive = false;
+      }
+      if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 35, 110, 25},
+                    "Save State")) {
+        SaveSnapshot(&cpu, "snapshot.sav");
+        snprintf(statusMsg, 64, "Saved snapshot.sav");
+        menuFileActive = false;
+      }
+      if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 65, 110, 25},
+                    "Exit")) {
+        CloseWindow();
+        return 0;
+      }
+      // Close if clicked outside
+      if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+          !CheckCollisionPointRec(GetMousePosition(), menuBounds) &&
+          !CheckCollisionPointRec(GetMousePosition(),
+                                  (Rectangle){5, 5, 60, 20})) {
+        menuFileActive = false;
+      }
+    }
+
+    if (menuEmulationActive) {
+      Rectangle menuBounds = {70, 30, 120, 40};
+      GuiUnlock();
+      GuiPanel(menuBounds, NULL);
+      // Add more emulation options here if needed
+      if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+          !CheckCollisionPointRec(GetMousePosition(), menuBounds) &&
+          !CheckCollisionPointRec(GetMousePosition(),
+                                  (Rectangle){70, 5, 80, 20})) {
+        menuEmulationActive = false;
+      }
+    }
+
+    if (menuHelpActive) {
+      Rectangle menuBounds = {135, 30, 100, 40};
+      GuiUnlock();
+      GuiPanel(menuBounds, NULL);
+      if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 5, 90, 25},
+                    "Manual")) {
+        showManual = true;
+        menuHelpActive = false;
+      }
+    }
+
+    // --- Manual Window ---
+    if (showManual) {
+      GuiUnlock(); // Ensure we can interact with the manual
+      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                    Fade(BLACK, 0.5f));
+      Rectangle manBounds = {(float)GetScreenWidth() / 2 - 200,
+                             (float)GetScreenHeight() / 2 - 200, 400, 400};
+
+      if (GuiWindowBox(manBounds, "6502 Manual"))
+        showManual = false;
+
+      Rectangle textBounds = {manBounds.x + 10, manBounds.y + 30,
+                              manBounds.width - 20, manBounds.height - 40};
+
+      // Use Read-Only TextBoxMulti for scrollable/selectable text
+      GuiSetStyle(DEFAULT, TEXT_WRAP_MODE, TEXT_WRAP_WORD);
+      GuiTextBoxMulti(textBounds, (char *)MANUAL_TEXT, 1024, false);
+      GuiSetStyle(DEFAULT, TEXT_WRAP_MODE, TEXT_WRAP_NONE);
     }
 
     EndDrawing();

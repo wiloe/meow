@@ -1,0 +1,21 @@
+# ninja log v7
+2	51	7901286821269625	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-mkdir	f746ba6ea2ac950
+2	51	7901286821269625	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-mkdir	f746ba6ea2ac950
+52	58460	7901287405337721	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-download	5cbb52737f41b782
+52	58460	7901287405337721	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-download	5cbb52737f41b782
+58462	58656	7901287405456614	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-update	f41691644f0aa787
+58462	58656	7901287405456614	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-update	f41691644f0aa787
+58656	58717	7901287407946673	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-patch	b64c23389dd9decb
+58656	58717	7901287407946673	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-patch	b64c23389dd9decb
+58717	58771	7901287408482359	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-configure	72be3fc37163b5d5
+58717	58771	7901287408482359	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-configure	72be3fc37163b5d5
+58771	58833	7901287409100946	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-build	786eafb886ecf07a
+58771	58833	7901287409100946	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-build	786eafb886ecf07a
+58833	58894	7901287409682722	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-install	74a25d84ad0b59eb
+58833	58894	7901287409682722	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-install	74a25d84ad0b59eb
+58895	58957	7901287410333194	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-test	ee2556c89a5999c2
+58895	58957	7901287410333194	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-test	ee2556c89a5999c2
+58957	59037	7901287411058220	CMakeFiles/sdl2_image-populate-complete	a03a1c465b1c96b9
+58957	59037	7901287411058220	sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-done	a03a1c465b1c96b9
+58957	59037	7901287411058220	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/CMakeFiles/sdl2_image-populate-complete	a03a1c465b1c96b9
+58957	59037	7901287411058220	C:/Users/golde/source/repos/meow/build/_deps/sdl2_image-subbuild/sdl2_image-populate-prefix/src/sdl2_image-populate-stamp/sdl2_image-populate-done	a03a1c465b1c96b9

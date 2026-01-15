@@ -1,6 +1,6 @@
-C:/Users/golde/source/repos/meow/build/CMakeFiles/rom_gen.dir
-C:/Users/golde/source/repos/meow/build/CMakeFiles/gen_rom_file.dir
-C:/Users/golde/source/repos/meow/build/CMakeFiles/emu6502.dir
+C:/Users/golde/source/repos/meow/build/CMakeFiles/icon_gen.dir
+C:/Users/golde/source/repos/meow/build/CMakeFiles/meow.dir
+C:/Users/golde/source/repos/meow/build/CMakeFiles/rom_generator.dir
 C:/Users/golde/source/repos/meow/build/CMakeFiles/package.dir
 C:/Users/golde/source/repos/meow/build/CMakeFiles/package_source.dir
 C:/Users/golde/source/repos/meow/build/CMakeFiles/edit_cache.dir

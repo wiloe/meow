@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include <stdio.h>
 #include <string.h>
 
 // Status Flags
@@ -109,7 +110,7 @@ static const uint8_t CYCLES[256] = {
     7, 6, 0, 0, 0, 3, 5, 0, 3, 2, 2, 0, 0, 4, 6, 0, // 00-0F
     2, 5, 0, 0, 0, 4, 6, 0, 2, 4, 0, 0, 0, 4, 7, 0, // 10-1F
     6, 6, 0, 0, 3, 3, 5, 0, 4, 2, 2, 0, 4, 4, 6, 0, // 20-2F
-    2, 5, 0, 0, 0, 4, 6, 0, 2, 4, 0, 0, 0, 4, 7, 0, // 30-3F
+    2, 5, 0, 0, 0, 4, 6, 0, 2, 4, 0, 0, 4, 4, 7, 0, // 30-3F
     6, 6, 0, 0, 0, 3, 5, 0, 3, 2, 2, 0, 3, 4, 6, 0, // 40-4F
     2, 5, 0, 0, 0, 4, 6, 0, 2, 4, 0, 0, 0, 4, 7, 0, // 50-5F
     6, 6, 0, 0, 0, 3, 5, 0, 4, 2, 2, 0, 5, 4, 6, 0, // 60-6F
@@ -307,6 +308,14 @@ int cpu_step(CPU *cpu) {
     cpu->x = cpu->sp;
     cpu_set_zn_flags(cpu, cpu->x);
     break;
+  case 0xA8: // TAY
+    cpu->y = cpu->a;
+    cpu_set_zn_flags(cpu, cpu->y);
+    break;
+  case 0x8A: // TXA
+    cpu->a = cpu->x;
+    cpu_set_zn_flags(cpu, cpu->a);
+    break;
   case 0x9A: // TXS
     cpu->sp = cpu->x;
     break;
@@ -349,6 +358,36 @@ int cpu_step(CPU *cpu) {
     if (cpu->status & FLAG_N)
       cpu->pc += offset;
   } break;
+  case 0x65: // ADC Zero Page
+  {
+    uint8_t value = cpu_read(cpu, cpu_fetch(cpu));
+    if (cpu->status & FLAG_D) {
+      uint16_t l = (cpu->a & 0x0F) + (value & 0x0F) + (cpu->status & FLAG_C);
+      uint16_t h = (cpu->a >> 4) + (value >> 4) + (l > 9);
+      if (l > 9)
+        l += 6;
+      if (h > 9)
+        h += 6;
+      if (h > 9)
+        cpu->status |= FLAG_C;
+      else
+        cpu->status &= ~FLAG_C;
+      cpu->a = (h << 4) | (l & 0x0F);
+      cpu_set_zn_flags(cpu, cpu->a);
+    } else {
+      uint16_t sum = (uint16_t)cpu->a + value + (cpu->status & FLAG_C);
+      if (~((uint16_t)cpu->a ^ value) & ((uint16_t)cpu->a ^ sum) & 0x0080)
+        cpu->status |= FLAG_V;
+      else
+        cpu->status &= ~FLAG_V;
+      if (sum > 0xFF)
+        cpu->status |= FLAG_C;
+      else
+        cpu->status &= ~FLAG_C;
+      cpu->a = (uint8_t)sum;
+      cpu_set_zn_flags(cpu, cpu->a);
+    }
+  } break;
   case 0x69: // ADC Immediate
   {
     uint8_t value = cpu_fetch(cpu);
@@ -366,6 +405,38 @@ int cpu_step(CPU *cpu) {
       cpu->a = (h << 4) | (l & 0x0F);
       cpu_set_zn_flags(cpu, cpu->a);
     } else {
+      uint16_t sum = (uint16_t)cpu->a + value + (cpu->status & FLAG_C);
+      if (~((uint16_t)cpu->a ^ value) & ((uint16_t)cpu->a ^ sum) & 0x0080)
+        cpu->status |= FLAG_V;
+      else
+        cpu->status &= ~FLAG_V;
+      if (sum > 0xFF)
+        cpu->status |= FLAG_C;
+      else
+        cpu->status &= ~FLAG_C;
+      cpu->a = (uint8_t)sum;
+      cpu_set_zn_flags(cpu, cpu->a);
+    }
+  } break;
+  case 0xE5: // SBC Zero Page
+  {
+    uint8_t value = cpu_read(cpu, cpu_fetch(cpu));
+    if (cpu->status & FLAG_D) {
+      uint16_t l =
+          (cpu->a & 0x0F) - (value & 0x0F) - (1 - (cpu->status & FLAG_C));
+      uint16_t h = (cpu->a >> 4) - (value >> 4) - ((l & 0x10) != 0);
+      if (l & 0x10)
+        l -= 6;
+      if (h & 0x10)
+        h -= 6;
+      if (h & 0x10)
+        cpu->status &= ~FLAG_C;
+      else
+        cpu->status |= FLAG_C;
+      cpu->a = (h << 4) | (l & 0x0F);
+      cpu_set_zn_flags(cpu, cpu->a);
+    } else {
+      value = value ^ 0xFF;
       uint16_t sum = (uint16_t)cpu->a + value + (cpu->status & FLAG_C);
       if (~((uint16_t)cpu->a ^ value) & ((uint16_t)cpu->a ^ sum) & 0x0080)
         cpu->status |= FLAG_V;
@@ -922,8 +993,16 @@ int cpu_step(CPU *cpu) {
   } break;
   case 0xEA: // NOP
     break;
+  case 0x3C: // NOP Absolute,X (Illegal on NMOS 6502)
+  {
+    uint8_t l = cpu_fetch(cpu);
+    uint8_t h = cpu_fetch(cpu);
+    uint16_t addr = ((h << 8) | l) + cpu->x;
+    cpu_read(cpu, addr); // Read for timing/side effects, ignore result
+  } break;
   default:
     // Unimplemented opcode
+    printf("Unimplemented opcode: 0x%02X at 0x%04X\n", opcode, cpu->pc - 1);
     break;
   }
 

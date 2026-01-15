@@ -1,0 +1,14 @@
+# Target labels
+ clay-populate
+# Source files and their labels
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/CMakeFiles/clay-populate
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/CMakeFiles/clay-populate.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/CMakeFiles/clay-populate-complete.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-build.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-configure.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-download.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-install.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-mkdir.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-patch.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-test.rule
+C:/Users/golde/source/repos/meow/build/_deps/clay-subbuild/clay-populate-prefix/src/clay-populate-stamp/clay-populate-update.rule

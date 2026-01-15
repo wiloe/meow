@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -101,7 +102,7 @@ int main() {
     fclose(f);
     printf("Success: rom.bin created!\n");
   } else {
-    printf("Error: Could not write rom.bin\n");
+    perror("Error: Could not write rom.bin");
     return 1;
   }
 

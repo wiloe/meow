@@ -1,0 +1,14 @@
+# Target labels
+ sokol-populate
+# Source files and their labels
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/CMakeFiles/sokol-populate
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/CMakeFiles/sokol-populate.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/CMakeFiles/sokol-populate-complete.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-build.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-configure.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-download.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-install.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-mkdir.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-patch.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-test.rule
+C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-update.rule

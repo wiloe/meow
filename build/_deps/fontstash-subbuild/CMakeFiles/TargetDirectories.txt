@@ -1,0 +1,3 @@
+C:/Users/golde/source/repos/meow/build/_deps/fontstash-subbuild/CMakeFiles/fontstash-populate.dir
+C:/Users/golde/source/repos/meow/build/_deps/fontstash-subbuild/CMakeFiles/edit_cache.dir
+C:/Users/golde/source/repos/meow/build/_deps/fontstash-subbuild/CMakeFiles/rebuild_cache.dir

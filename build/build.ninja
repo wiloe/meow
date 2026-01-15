@@ -11,7 +11,7 @@
 # =============================================================================
 
 # =============================================================================
-# Project: emu6502
+# Project: meow
 # Configurations: Debug
 # =============================================================================
 
@@ -41,99 +41,153 @@ include CMakeFiles\rules.ninja
 
 cmake_ninja_workdir = C$:\Users\golde\source\repos\meow\build\
 # =============================================================================
-# Object build statements for EXECUTABLE target rom_gen
+# Object build statements for EXECUTABLE target icon_gen
 
 
 #############################################
-# Order-only phony target for rom_gen
+# Order-only phony target for icon_gen
 
-build cmake_object_order_depends_target_rom_gen: phony || .
+build cmake_object_order_depends_target_icon_gen: phony || .
 
-build CMakeFiles\rom_gen.dir\rom_generator.c.obj: C_COMPILER__rom_gen_unscanned_Debug C$:\Users\golde\source\repos\meow\rom_generator.c || cmake_object_order_depends_target_rom_gen
+build CMakeFiles\icon_gen.dir\icon_generator.c.obj: C_COMPILER__icon_gen_unscanned_Debug C$:\Users\golde\source\repos\meow\icon_generator.c || cmake_object_order_depends_target_icon_gen
   CONFIG = Debug
   DEFINES = -D_CRT_SECURE_NO_WARNINGS
   FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
-  OBJECT_DIR = CMakeFiles\rom_gen.dir
-  OBJECT_FILE_DIR = CMakeFiles\rom_gen.dir
-  TARGET_COMPILE_PDB = CMakeFiles\rom_gen.dir\
-  TARGET_PDB = rom_gen.pdb
+  OBJECT_DIR = CMakeFiles\icon_gen.dir
+  OBJECT_FILE_DIR = CMakeFiles\icon_gen.dir
+  TARGET_COMPILE_PDB = CMakeFiles\icon_gen.dir\
+  TARGET_PDB = icon_gen.pdb
 
 
 # =============================================================================
-# Link build statements for EXECUTABLE target rom_gen
+# Link build statements for EXECUTABLE target icon_gen
 
 
 #############################################
-# Link the executable rom_gen.exe
+# Link the executable icon_gen.exe
 
-build rom_gen.exe: C_EXECUTABLE_LINKER__rom_gen_Debug CMakeFiles\rom_gen.dir\rom_generator.c.obj
+build icon_gen.exe: C_EXECUTABLE_LINKER__icon_gen_Debug CMakeFiles\icon_gen.dir\icon_generator.c.obj
   CONFIG = Debug
   FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
-  OBJECT_DIR = CMakeFiles\rom_gen.dir
+  OBJECT_DIR = CMakeFiles\icon_gen.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
-  TARGET_COMPILE_PDB = CMakeFiles\rom_gen.dir\
-  TARGET_FILE = rom_gen.exe
-  TARGET_IMPLIB = rom_gen.lib
-  TARGET_PDB = rom_gen.pdb
-
-
-#############################################
-# Utility command for gen_rom_file
-
-build gen_rom_file: phony CMakeFiles\gen_rom_file C$:\Users\golde\source\repos\meow\rom.bin rom_gen.exe
+  TARGET_COMPILE_PDB = CMakeFiles\icon_gen.dir\
+  TARGET_FILE = icon_gen.exe
+  TARGET_IMPLIB = icon_gen.lib
+  TARGET_PDB = icon_gen.pdb
 
 # =============================================================================
-# Object build statements for EXECUTABLE target emu6502
+# Object build statements for EXECUTABLE target meow
 
 
 #############################################
-# Order-only phony target for emu6502
+# Order-only phony target for meow
 
-build cmake_object_order_depends_target_emu6502: phony || cmake_object_order_depends_target_glfw cmake_object_order_depends_target_raylib gen_rom_file
+build cmake_object_order_depends_target_meow: phony || cmake_object_order_depends_target_glfw cmake_object_order_depends_target_raylib icon.ico icon_gen.exe
 
-build CMakeFiles\emu6502.dir\main.c.obj: C_COMPILER__emu6502_unscanned_Debug C$:\Users\golde\source\repos\meow\main.c || cmake_object_order_depends_target_emu6502
+build CMakeFiles\meow.dir\main.c.obj: C_COMPILER__meow_unscanned_Debug C$:\Users\golde\source\repos\meow\main.c || cmake_object_order_depends_target_meow
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
   FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
-  INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
-  OBJECT_DIR = CMakeFiles\emu6502.dir
-  OBJECT_FILE_DIR = CMakeFiles\emu6502.dir
-  TARGET_COMPILE_PDB = CMakeFiles\emu6502.dir\
-  TARGET_PDB = emu6502.pdb
+  INCLUDES = -IC:\Users\golde\source\repos\meow -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
+  OBJECT_DIR = CMakeFiles\meow.dir
+  OBJECT_FILE_DIR = CMakeFiles\meow.dir
+  TARGET_COMPILE_PDB = CMakeFiles\meow.dir\
+  TARGET_PDB = meow.pdb
 
-build CMakeFiles\emu6502.dir\cpu.c.obj: C_COMPILER__emu6502_unscanned_Debug C$:\Users\golde\source\repos\meow\cpu.c || cmake_object_order_depends_target_emu6502
+build CMakeFiles\meow.dir\cpu.c.obj: C_COMPILER__meow_unscanned_Debug C$:\Users\golde\source\repos\meow\cpu.c || cmake_object_order_depends_target_meow
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
   FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
-  INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
-  OBJECT_DIR = CMakeFiles\emu6502.dir
-  OBJECT_FILE_DIR = CMakeFiles\emu6502.dir
-  TARGET_COMPILE_PDB = CMakeFiles\emu6502.dir\
-  TARGET_PDB = emu6502.pdb
+  INCLUDES = -IC:\Users\golde\source\repos\meow -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
+  OBJECT_DIR = CMakeFiles\meow.dir
+  OBJECT_FILE_DIR = CMakeFiles\meow.dir
+  TARGET_COMPILE_PDB = CMakeFiles\meow.dir\
+  TARGET_PDB = meow.pdb
+
+build CMakeFiles\meow.dir\debugger.c.obj: C_COMPILER__meow_unscanned_Debug C$:\Users\golde\source\repos\meow\debugger.c || cmake_object_order_depends_target_meow
+  CONFIG = Debug
+  DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
+  FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  INCLUDES = -IC:\Users\golde\source\repos\meow -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
+  OBJECT_DIR = CMakeFiles\meow.dir
+  OBJECT_FILE_DIR = CMakeFiles\meow.dir
+  TARGET_COMPILE_PDB = CMakeFiles\meow.dir\
+  TARGET_PDB = meow.pdb
+
+build CMakeFiles\meow.dir\meow.rc.res: RC_COMPILER__meow_unscanned_Debug C$:\Users\golde\source\repos\meow\build\meow.rc || cmake_object_order_depends_target_meow
+  CONFIG = Debug
+  DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
+  DEP_FILE = CMakeFiles\meow.dir\meow.rc.res.d
+  FLAGS = -DWIN32 -D_DEBUG
+  INCLUDES = -I C:\Users\golde\source\repos\meow -I C:\Users\golde\source\repos\meow\build\_deps\raylib-src\src
+  OBJECT_DIR = CMakeFiles\meow.dir
+  OBJECT_FILE_DIR = CMakeFiles\meow.dir
+  TARGET_COMPILE_PDB = CMakeFiles\meow.dir\
+  TARGET_PDB = meow.pdb
 
 
 # =============================================================================
-# Link build statements for EXECUTABLE target emu6502
+# Link build statements for EXECUTABLE target meow
 
 
 #############################################
-# Link the executable emu6502.exe
+# Link the executable meow.exe
 
-build emu6502.exe: C_EXECUTABLE_LINKER__emu6502_Debug CMakeFiles\emu6502.dir\main.c.obj CMakeFiles\emu6502.dir\cpu.c.obj | _deps\raylib-build\raylib\raylib.lib || _deps\raylib-build\raylib\external\glfw\src\glfw _deps\raylib-build\raylib\raylib.lib gen_rom_file
+build meow.exe: C_EXECUTABLE_LINKER__meow_Debug CMakeFiles\meow.dir\main.c.obj CMakeFiles\meow.dir\cpu.c.obj CMakeFiles\meow.dir\debugger.c.obj CMakeFiles\meow.dir\meow.rc.res | _deps\raylib-build\raylib\raylib.lib || _deps\raylib-build\raylib\external\glfw\src\glfw _deps\raylib-build\raylib\raylib.lib icon_gen.exe
   CONFIG = Debug
   FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
-  LINK_LIBRARIES = _deps\raylib-build\raylib\raylib.lib  gdi32.lib  winmm.lib  user32.lib  shell32.lib  opengl32.lib  glu32.lib  winmm.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
-  OBJECT_DIR = CMakeFiles\emu6502.dir
-  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\golde\source\repos\meow\build && "C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different C:/Users/golde/source/repos/meow/rom.bin C:/Users/golde/source/repos/meow/build"
+  LINK_LIBRARIES = _deps\raylib-build\raylib\raylib.lib  opengl32.lib  gdi32.lib  winmm.lib  glu32.lib  winmm.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
+  OBJECT_DIR = CMakeFiles\meow.dir
+  POST_BUILD = cd .
   PRE_LINK = cd .
-  TARGET_COMPILE_PDB = CMakeFiles\emu6502.dir\
-  TARGET_FILE = emu6502.exe
-  TARGET_IMPLIB = emu6502.lib
-  TARGET_PDB = emu6502.pdb
+  TARGET_COMPILE_PDB = CMakeFiles\meow.dir\
+  TARGET_FILE = meow.exe
+  TARGET_IMPLIB = meow.lib
+  TARGET_PDB = meow.pdb
+
+# =============================================================================
+# Object build statements for EXECUTABLE target rom_generator
+
+
+#############################################
+# Order-only phony target for rom_generator
+
+build cmake_object_order_depends_target_rom_generator: phony || .
+
+build CMakeFiles\rom_generator.dir\rom_generator.c.obj: C_COMPILER__rom_generator_unscanned_Debug C$:\Users\golde\source\repos\meow\rom_generator.c || cmake_object_order_depends_target_rom_generator
+  CONFIG = Debug
+  DEFINES = -D_CRT_SECURE_NO_WARNINGS
+  FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  OBJECT_DIR = CMakeFiles\rom_generator.dir
+  OBJECT_FILE_DIR = CMakeFiles\rom_generator.dir
+  TARGET_COMPILE_PDB = CMakeFiles\rom_generator.dir\
+  TARGET_PDB = rom_generator.pdb
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target rom_generator
+
+
+#############################################
+# Link the executable rom_generator.exe
+
+build rom_generator.exe: C_EXECUTABLE_LINKER__rom_generator_Debug CMakeFiles\rom_generator.dir\rom_generator.c.obj
+  CONFIG = Debug
+  FLAGS = /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
+  LINK_LIBRARIES = kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
+  OBJECT_DIR = CMakeFiles\rom_generator.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_COMPILE_PDB = CMakeFiles\rom_generator.dir\
+  TARGET_FILE = rom_generator.exe
+  TARGET_IMPLIB = rom_generator.lib
+  TARGET_PDB = rom_generator.pdb
 
 
 #############################################
@@ -215,17 +269,11 @@ build install\local: phony CMakeFiles\install\local.util
 
 
 #############################################
-# Phony custom command for CMakeFiles\gen_rom_file
+# Custom command for icon.ico
 
-build CMakeFiles\gen_rom_file | ${cmake_ninja_workdir}CMakeFiles\gen_rom_file: phony C$:\Users\golde\source\repos\meow\rom.bin || rom_gen.exe
-
-
-#############################################
-# Custom command for C:\Users\golde\source\repos\meow\rom.bin
-
-build C$:\Users\golde\source\repos\meow\rom.bin: CUSTOM_COMMAND rom_gen.exe || rom_gen.exe
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\golde\source\repos\meow && C:\Users\golde\source\repos\meow\build\rom_gen.exe"
-  DESC = Generating rom.bin
+build icon.ico | ${cmake_ninja_workdir}icon.ico: CUSTOM_COMMAND icon_gen.exe || _deps\raylib-build\raylib\external\glfw\src\glfw _deps\raylib-build\raylib\raylib.lib icon_gen.exe
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\golde\source\repos\meow\build && C:\Users\golde\source\repos\meow\build\icon_gen.exe"
+  DESC = Generating 6502 icon
   restat = 1
 
 # =============================================================================
@@ -328,7 +376,7 @@ build cmake_object_order_depends_target_raylib: phony || cmake_object_order_depe
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\raudio.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\raudio.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -338,7 +386,7 @@ build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\raudio.c.obj: C_COMPILER__
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rcore.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\rcore.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -348,7 +396,7 @@ build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rcore.c.obj: C_COMPILER__r
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rmodels.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\rmodels.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -358,7 +406,7 @@ build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rmodels.c.obj: C_COMPILER_
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rshapes.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\rshapes.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -368,7 +416,7 @@ build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rshapes.c.obj: C_COMPILER_
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rtext.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\rtext.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -378,7 +426,7 @@ build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rtext.c.obj: C_COMPILER__r
 build _deps\raylib-build\raylib\CMakeFiles\raylib.dir\rtextures.c.obj: C_COMPILER__raylib_unscanned_Debug C$:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\rtextures.c || cmake_object_order_depends_target_raylib
   CONFIG = Debug
   DEFINES = -DGRAPHICS_API_OPENGL_33 -DPLATFORM_DESKTOP -D_CRT_SECURE_NO_WARNINGS
-  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1
+  FLAGS = -fno-strict-aliasing -Werror=implicit-function-declaration -Werror=pointer-arith /DWIN32 /D_WINDOWS /W3 /MDd /Zi /Ob0 /Od /RTC1 -Wno-tautological-compare -Wno-deprecated-declarations -Wno-unused-function
   INCLUDES = -IC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src -imsvcC:\Users\golde\source\repos\meow\build\_deps\raylib-src\src\external\glfw\include
   OBJECT_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
   OBJECT_FILE_DIR = _deps\raylib-build\raylib\CMakeFiles\raylib.dir
@@ -891,15 +939,17 @@ build _deps\raylib-build\raylib\external\glfw\src\CMakeFiles\update_mappings | $
 # =============================================================================
 # Target aliases.
 
-build emu6502: phony emu6502.exe
-
 build glfw: phony _deps\raylib-build\raylib\external\glfw\src\glfw
+
+build icon_gen: phony icon_gen.exe
+
+build meow: phony meow.exe
 
 build raylib: phony _deps\raylib-build\raylib\raylib.lib
 
 build raylib.lib: phony _deps\raylib-build\raylib\raylib.lib
 
-build rom_gen: phony rom_gen.exe
+build rom_generator: phony rom_generator.exe
 
 build update_mappings: phony _deps\raylib-build\raylib\external\glfw\src\update_mappings
 
@@ -911,7 +961,7 @@ build update_mappings: phony _deps\raylib-build\raylib\external\glfw\src\update_
 #############################################
 # Folder: C:/Users/golde/source/repos/meow/build
 
-build all: phony rom_gen.exe gen_rom_file emu6502.exe _deps\raylib-build\all
+build all: phony icon_gen.exe meow.exe rom_generator.exe _deps\raylib-build\all
 
 # =============================================================================
 

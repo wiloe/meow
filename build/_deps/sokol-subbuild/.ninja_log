@@ -1,0 +1,21 @@
+# ninja log v7
+4	66	7901287438712038	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-mkdir	cb120fe13e769655
+4	66	7901287438712038	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-mkdir	cb120fe13e769655
+66	2442	7901287462558130	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-download	69caf29266e53b71
+66	2442	7901287462558130	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-download	69caf29266e53b71
+2442	3692	7901287462618142	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-update	fbe4abf903a5c46a
+2442	3692	7901287462618142	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-update	fbe4abf903a5c46a
+3693	3751	7901287475570756	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-patch	dd8627ab4d95e21e
+3693	3751	7901287475570756	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-patch	dd8627ab4d95e21e
+3751	3804	7901287476057321	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-configure	90bc8acd8b1bc3aa
+3751	3804	7901287476057321	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-configure	90bc8acd8b1bc3aa
+3804	3861	7901287476692965	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-build	6961b884bb87255f
+3804	3861	7901287476692965	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-build	6961b884bb87255f
+3861	3918	7901287477252623	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-install	e9b7957088b2866d
+3861	3918	7901287477252623	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-install	e9b7957088b2866d
+3918	3972	7901287477819571	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-test	90013f851d625a1b
+3918	3972	7901287477819571	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-test	90013f851d625a1b
+3972	4046	7901287478556626	CMakeFiles/sokol-populate-complete	7a7b07464544b581
+3972	4046	7901287478556626	sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-done	7a7b07464544b581
+3972	4046	7901287478556626	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/CMakeFiles/sokol-populate-complete	7a7b07464544b581
+3972	4046	7901287478556626	C:/Users/golde/source/repos/meow/build/_deps/sokol-subbuild/sokol-populate-prefix/src/sokol-populate-stamp/sokol-populate-done	7a7b07464544b581

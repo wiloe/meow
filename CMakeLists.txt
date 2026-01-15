@@ -1,52 +1,67 @@
-cmake_minimum_required(VERSION 3.11)
-project(emu6502 C)
+cmake_minimum_required(VERSION 3.14)
+project(meow C)
 
 set(CMAKE_C_STANDARD 99)
 
-# Suppress MSVC deprecation warnings for standard C functions (fopen, strcpy, etc.)
+# Suppress MSVC CRT secure warnings
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
-# --- Raylib Source Build Configuration ---
-# Disable building examples and games to speed up compilation
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_GAMES    OFF CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Force static build
-
-# Use FetchContent to download and build Raylib automatically
 include(FetchContent)
+
+# --- Raylib ---
 FetchContent_Declare(
     raylib
     GIT_REPOSITORY https://github.com/raysan5/raylib.git
-    GIT_TAG        master
+    GIT_TAG master
 )
 FetchContent_MakeAvailable(raylib)
 
-# --- ROM Generator ---
-add_executable(rom_gen rom_generator.c)
-
-# Run the generator to create rom.bin in the source directory
-add_custom_command(
-    OUTPUT "${CMAKE_SOURCE_DIR}/rom.bin"
-    COMMAND $<TARGET_FILE:rom_gen>
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    DEPENDS rom_gen
-    COMMENT "Generating rom.bin"
-)
-add_custom_target(gen_rom_file ALL DEPENDS "${CMAKE_SOURCE_DIR}/rom.bin")
-
-add_executable(emu6502 main.c cpu.c)
-
-if(WIN32)
-    # Link against the 'raylib' target defined by add_subdirectory
-    target_link_libraries(emu6502 PRIVATE raylib gdi32 winmm user32 shell32)
+# Suppress warnings for raylib (external dependency)
+if(TARGET raylib)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+        target_compile_options(raylib PRIVATE 
+            -Wno-tautological-compare 
+            -Wno-deprecated-declarations 
+            -Wno-unused-function
+        )
+    endif()
 endif()
 
-add_dependencies(emu6502 gen_rom_file)
+# --- Icon Generation ---
+add_executable(icon_gen icon_generator.c)
 
-# Copy rom.bin to the build directory after build
-add_custom_command(TARGET emu6502 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/rom.bin"
-    "$<TARGET_FILE_DIR:emu6502>"
-    COMMENT "Copying rom.bin to output directory"
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/icon.ico
+    COMMAND icon_gen
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    DEPENDS icon_gen
+    COMMENT "Generating 6502 icon"
 )
+
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/meow.rc "IDI_ICON1 ICON \"${CMAKE_CURRENT_BINARY_DIR}/icon.ico\"")
+
+# --- Main Emulator Target ---
+add_executable(meow
+    main.c
+    cpu.c
+    debugger.c
+    ${CMAKE_CURRENT_BINARY_DIR}/meow.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/icon.ico
+)
+
+# Include current directory for header files (cpu.h, debugger.h, etc.)
+target_include_directories(meow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Link Raylib
+target_link_libraries(meow PRIVATE raylib)
+
+# Windows-specific dependencies for Raylib
+if(WIN32)
+    target_link_libraries(meow PRIVATE opengl32 gdi32 winmm)
+endif()
+
+# --- ROM Generator Target ---
+# Only add if source exists to prevent cmake errors
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rom_generator.c")
+add_executable(rom_generator rom_generator.c)
+endif()

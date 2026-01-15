@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    # Install dependencies on Linux
+    - name: Install Dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libraylib-dev libgl1-mesa-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev
+
+    # Install dependencies on Windows (using vcpkg is common, but here we assume raylib might be fetched or we rely on cmake to fail gracefully if missing)
+    # For a simple setup, we can try to fetch raylib via cmake if not present, or assume the user includes it.
+    # Since we don't have a vcpkg setup in the repo, we'll rely on the CMake configuration.
+    
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config Release
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: meow-${{ matrix.os }}
+        path: |
+          ${{github.workspace}}/build/meow*
+          ${{github.workspace}}/build/Release/meow*
