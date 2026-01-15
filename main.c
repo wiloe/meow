@@ -330,6 +330,7 @@ int main(int argc, char *argv[]) {
   bool menuEmulationActive = false;
   bool menuHelpActive = false;
   bool showManual = false;
+  Vector2 manualScroll = {0, 0};
 
   while (!WindowShouldClose()) {
     // Update
@@ -893,6 +894,7 @@ int main(int argc, char *argv[]) {
       if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 5, 90, 25},
                     "Manual")) {
         showManual = true;
+        manualScroll = (Vector2){0, 0};
         menuHelpActive = false;
       }
     }
@@ -908,13 +910,32 @@ int main(int argc, char *argv[]) {
       if (GuiWindowBox(manBounds, "6502 Manual"))
         showManual = false;
 
-      Rectangle textBounds = {manBounds.x + 10, manBounds.y + 30,
-                              manBounds.width - 20, manBounds.height - 40};
+      Rectangle panelRec = {manBounds.x + 10, manBounds.y + 30,
+                            manBounds.width - 20, manBounds.height - 40};
 
-      // Use Read-Only TextBoxMulti for scrollable/selectable text
-      GuiSetStyle(DEFAULT, TEXT_WRAP_MODE, TEXT_WRAP_WORD);
+      Font font = GuiGetFont();
+      Vector2 contentSize = MeasureTextEx(
+          font, MANUAL_TEXT, (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
+          (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
+      Rectangle contentRec = {0, 0, contentSize.x + 20, contentSize.y + 20};
+      Rectangle view = {0};
+
+      GuiScrollPanel(panelRec, NULL, contentRec, &manualScroll, &view);
+
+      BeginScissorMode((int)view.x, (int)view.y, (int)view.width,
+                       (int)view.height);
+      int prevBorder = GuiGetStyle(TEXTBOX, BORDER_WIDTH);
+      GuiSetStyle(TEXTBOX, BORDER_WIDTH, 0);
+      Rectangle textBounds = {panelRec.x + manualScroll.x,
+                              panelRec.y + manualScroll.y, contentRec.width,
+                              contentRec.height};
+      GuiSetStyle(DEFAULT, TEXT_WRAP_MODE,
+                  TEXT_WRAP_WORD); // Use Read-Only TextBoxMulti for
+                                   // scrollable/selectable text
       GuiTextBoxMulti(textBounds, (char *)MANUAL_TEXT, 1024, false);
       GuiSetStyle(DEFAULT, TEXT_WRAP_MODE, TEXT_WRAP_NONE);
+      GuiSetStyle(TEXTBOX, BORDER_WIDTH, prevBorder);
+      EndScissorMode();
     }
 
     EndDrawing();
