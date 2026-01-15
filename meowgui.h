@@ -2,6 +2,30 @@
 #define MEOWGUI_H
 
 #include "raygui.h"
+#include <ctype.h>
+
+// Helper to check for keywords
+static bool IsAsmKeyword(const char *word) {
+  static const char *keywords[] = {
+      "LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TAY", "TXA", "TYA",
+      "TSX", "TXS", "PHA", "PHP", "PLA", "PLP", "AND", "EOR", "ORA", "BIT",
+      "ADC", "SBC", "CMP", "CPX", "CPY", "INC", "DEC", "INX", "DEX", "INY",
+      "DEY", "ASL", "LSR", "ROL", "ROR", "JMP", "JSR", "RTS", "BCC", "BCS",
+      "BEQ", "BMI", "BNE", "BPL", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV",
+      "SEC", "SED", "SEI", "BRK", "NOP", "RTI", "ORG", "BYTE", "WORD", NULL};
+  char upper[16];
+  int i = 0;
+  while (word[i] && i < 15) {
+    upper[i] = toupper(word[i]);
+    i++;
+  }
+  upper[i] = 0;
+  for (int k = 0; keywords[k]; k++) {
+    if (strcmp(upper, keywords[k]) == 0)
+      return true;
+  }
+  return false;
+}
 
 // Text Box control with multiple lines
 int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
@@ -50,6 +74,7 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
   // compromise for a separate file. BETTER: We can't easily share the internal
   // cursor index. We will manage our own.
   static int localCursorIndex = 0;
+  static bool ctrlToggle = false;
   int thisCursorIndex = localCursorIndex;
 
   if (thisCursorIndex > textLength)
@@ -83,11 +108,6 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
   if (cursor.y < (bounds.y + GuiGetStyle(TEXTBOX, BORDER_WIDTH)))
     cursor.y = bounds.y + GuiGetStyle(TEXTBOX, BORDER_WIDTH);
 
-  // Mouse cursor rectangle
-  Rectangle mouseCursor = cursor;
-  mouseCursor.x = -1;
-  mouseCursor.width = 1;
-
   // Update control
   if ((state != STATE_DISABLED) &&            // Control not disabled
       !GuiGetStyle(TEXTBOX, TEXT_READONLY) && // TextBox not on read-only mode
@@ -98,6 +118,9 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
 
     if (editMode) {
       static int autoCursorCounter = 0;
+      if (IsKeyPressed(KEY_LEFT_CONTROL) || IsKeyPressed(KEY_RIGHT_CONTROL)) {
+        ctrlToggle = !ctrlToggle;
+      }
       if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_UP) ||
           IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_BACKSPACE) ||
           IsKeyDown(KEY_DELETE))
@@ -123,8 +146,7 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
       const char *charEncoded = CodepointToUTF8(codepoint, &codepointSize);
 
       // Handle text paste action
-      if (IsKeyPressed(KEY_V) &&
-          (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))) {
+      if (IsKeyPressed(KEY_V) && (ctrlToggle)) {
         const char *pasteText = GetClipboardText();
         if (pasteText != NULL) {
           int pasteLength = 0;
@@ -171,7 +193,7 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
         localCursorIndex = textLength;
 
       if ((textLength > localCursorIndex) && IsKeyPressed(KEY_DELETE) &&
-          (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))) {
+          (ctrlToggle)) {
         // Ctrl+Delete logic omitted for brevity, falling back to simple delete
         int nextCodepointSize = 0;
         GetCodepointNext(text + localCursorIndex, &nextCodepointSize);
@@ -189,7 +211,7 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
       }
 
       if ((localCursorIndex > 0) && IsKeyPressed(KEY_BACKSPACE) &&
-          (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))) {
+          (ctrlToggle)) {
         // Ctrl+Backspace logic omitted for brevity
         int prevCodepointSize = 0;
         GetCodepointPrevious(text + localCursorIndex, &prevCodepointSize);
@@ -308,9 +330,6 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
   Color textColor = GetColor(GuiGetStyle(TEXTBOX, TEXT + (state * 3)));
 
   // We need to draw line by line
-  int lineCount = 0;
-  const char *ptr = text;
-  int currentLine = 0;
   float yOffset = 0;
 
   // Simple line drawing
@@ -324,10 +343,65 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
       strncpy(lineBuffer, text + start, len);
       lineBuffer[len] = '\0';
 
-      DrawTextEx(font, lineBuffer,
-                 (Vector2){textBounds.x, textBounds.y + yOffset},
-                 (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
-                 (float)GuiGetStyle(DEFAULT, TEXT_SPACING), textColor);
+      // Syntax Highlighting Drawing
+      float currentX = textBounds.x;
+      int k = 0;
+      while (lineBuffer[k]) {
+        int chunkLen = 0;
+        Color col = textColor;
+
+        if (lineBuffer[k] == ';') {
+          // Comment
+          chunkLen = strlen(lineBuffer + k);
+          col = GRAY;
+        } else if (isdigit(lineBuffer[k]) || lineBuffer[k] == '$' ||
+                   lineBuffer[k] == '#') {
+          // Number/Immediate
+          col = VIOLET;
+          chunkLen = 1;
+          while (lineBuffer[k + chunkLen] &&
+                 !isspace(lineBuffer[k + chunkLen]) &&
+                 lineBuffer[k + chunkLen] != ';')
+            chunkLen++;
+        } else if (isalpha(lineBuffer[k]) || lineBuffer[k] == '.') {
+          // Word
+          while (lineBuffer[k + chunkLen] &&
+                 (isalnum(lineBuffer[k + chunkLen]) ||
+                  lineBuffer[k + chunkLen] == '_' ||
+                  lineBuffer[k + chunkLen] == '.'))
+            chunkLen++;
+          char word[64];
+          if (chunkLen < 64) {
+            strncpy(word, lineBuffer + k, chunkLen);
+            word[chunkLen] = 0;
+            if (IsAsmKeyword(word))
+              col = GOLD;
+            else if (lineBuffer[k + chunkLen] == ':') {
+              col = RED;
+              chunkLen++;
+            } // Label definition
+          }
+        } else {
+          // Other chars (punctuation, space)
+          chunkLen = 1;
+        }
+
+        char chunk[1024];
+        if (chunkLen > 1023)
+          chunkLen = 1023;
+        strncpy(chunk, lineBuffer + k, chunkLen);
+        chunk[chunkLen] = 0;
+
+        DrawTextEx(font, chunk, (Vector2){currentX, textBounds.y + yOffset},
+                   (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
+                   (float)GuiGetStyle(DEFAULT, TEXT_SPACING), col);
+
+        Vector2 size = MeasureTextEx(font, chunk,
+                                     (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
+                                     (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
+        currentX += size.x;
+        k += chunkLen;
+      }
 
       yOffset += GuiGetStyle(DEFAULT, TEXT_SIZE) +
                  GuiGetStyle(DEFAULT, TEXT_LINE_SPACING);

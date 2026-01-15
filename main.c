@@ -44,29 +44,66 @@ bool showRomWriteWarning = false;
 int romWriteWarningTimer = 0;
 
 // Manual Text
-const char *MANUAL_TEXT = "6502 ASSEMBLY MANUAL\n"
-                          "--------------------\n\n"
-                          "ADDRESSING MODES:\n"
-                          "  Immediate:   LDA #$01    (Value 0x01)\n"
-                          "  Zero Page:   LDA $01     (Mem 0x0001)\n"
-                          "  Absolute:    LDA $0200   (Mem 0x0200)\n"
-                          "  Indexed:     LDA $0200,X (Mem 0x0200 + X)\n\n"
-                          "COMMON OPCODES:\n"
-                          "  LDA/LDX/LDY  Load Register (A, X, Y)\n"
-                          "  STA/STX/STY  Store Register (A, X, Y)\n"
-                          "  ADC          Add with Carry\n"
-                          "  SBC          Subtract with Carry\n"
-                          "  INC/DEC      Increment/Decrement\n"
-                          "  INX/DEX      Increment/Decrement X\n"
-                          "  INY/DEY      Increment/Decrement Y\n"
-                          "  JMP          Jump to Address\n"
-                          "  JSR          Jump to Subroutine\n"
-                          "  RTS          Return from Subroutine\n"
-                          "  CMP/CPX/CPY  Compare Register\n"
-                          "  BNE          Branch if Not Equal (Z=0)\n"
-                          "  BEQ          Branch if Equal (Z=1)\n"
-                          "  BCC          Branch if Carry Clear\n"
-                          "  BCS          Branch if Carry Set\n";
+const char *MANUAL_TEXT =
+    "--------------------\n\n"
+    "ADDRESSING MODES:\n"
+    "  Implied:     TAX         (No operand)\n"
+    "  Immediate:   LDA #$01    (Value $01)\n"
+    "  Zero Page:   LDA $01     (Addr $0001)\n"
+    "  Zero Pg,X:   LDA $01,X   (Addr ($01+X)&FF)\n"
+    "  Absolute:    LDA $0200   (Addr $0200)\n"
+    "  Absolute,X:  LDA $0200,X (Addr $0200+X)\n"
+    "  Absolute,Y:  LDA $0200,Y (Addr $0200+Y)\n"
+    "  Indirect,X:  LDA ($01,X) (Ptr at $01+X)\n"
+    "  Indirect,Y:  LDA ($01),Y (Ptr at $01, +Y)\n"
+    "  Relative:    BNE Label   (PC + Offset)\n\n"
+    "ADDRESSING DETAILS:\n"
+    "  - ZP,X/Y modes wrap within page 0 ($FF+1=$00).\n"
+    "  - Indirect ptrs at $FF read high byte from $00.\n"
+    "  - Abs,X/Y add reg to 16-bit addr (no wrap).\n\n"
+    "COMMON OPCODES:\n"
+    "  LDA/LDX/LDY  Load Register (A, X, Y)\n"
+    "  STA/STX/STY  Store Register (A, X, Y)\n"
+    "  ADC          Add with Carry\n"
+    "  SBC          Subtract with Carry\n"
+    "  INC/DEC      Increment/Decrement\n"
+    "  INX/DEX      Increment/Decrement X\n"
+    "  INY/DEY      Increment/Decrement Y\n"
+    "  JMP          Jump to Address\n"
+    "  JSR          Jump to Subroutine\n"
+    "  RTS          Return from Subroutine\n"
+    "  CMP/CPX/CPY  Compare Register\n"
+    "  BNE          Branch if Not Equal (Z=0)\n"
+    "  BEQ          Branch if Equal (Z=1)\n"
+    "  BCC          Branch if Carry Clear\n"
+    "  BCS          Branch if Carry Set\n"
+    "\n"
+    "MEMORY MAP:\n"
+    "  $0000-$00FF  Zero Page\n"
+    "  $0100-$01FF  Stack\n"
+    "  $0200-$DFFF  RAM\n"
+    "  $E000-$E003  MMIO (Console/Audio)\n"
+    "  $E004-$FFFF  ROM\n"
+    "\n"
+    "STACK OPERATIONS:\n"
+    "  PHA          Push Accumulator\n"
+    "  PLA          Pull Accumulator (Sets Z/N)\n"
+    "  PHP          Push Processor Status\n"
+    "  PLP          Pull Processor Status\n"
+    "\n"
+    "INTERRUPTS:\n"
+    "  IRQ          Hardware Interrupt (Maskable)\n"
+    "  NMI          Non-Maskable Interrupt\n"
+    "  BRK          Software Interrupt\n"
+    "\n"
+    "STACK QUIRKS:\n"
+    "  - PHP pushes Status with B bit (4) and bit 5 set.\n"
+    "  - PLP ignores B bit and enforces bit 5 as 1.\n"
+    "\n"
+    "BRK vs IRQ:\n"
+    "  - BRK sets B flag on stack, IRQ clears it.\n"
+    "  - BRK increments PC (skips padding byte).\n"
+    "  - IRQ is ignored if I flag is set.\n";
 
 // --- File Dialog ---
 typedef struct {
@@ -83,6 +120,7 @@ typedef struct {
 } GuiFileDialogState;
 
 GuiFileDialogState fileDialog = {0};
+int fileDialogMode = 0; // 0: ROM, 1: Load ASM, 2: Save ASM
 
 void InitFileDialog(const char *initDir) {
   fileDialog.active = false;
@@ -263,11 +301,15 @@ int main(int argc, char *argv[]) {
 
   bool breakpoints[MEM_SIZE] = {0};
   bool runEmulation = false;
+  bool stepOverActive = false;
+  uint16_t stepOverTarget = 0;
   double clockAccumulator = 0.0;
   char addrBuffer[5] = "0000";
 
   bool editFileMode = false;
   char fileBuffer[64] = "rom.bin";
+  bool editSaveName = false;
+  char asmSaveName[64] = "code.asm";
   char statusMsg[64] = "Ready";
 
   // CLI Argument Loading
@@ -331,6 +373,7 @@ int main(int argc, char *argv[]) {
   bool menuHelpActive = false;
   bool showManual = false;
   Vector2 manualScroll = {0, 0};
+  Vector2 zpScroll = {0, 0};
 
   while (!WindowShouldClose()) {
     // Update
@@ -347,6 +390,13 @@ int main(int argc, char *argv[]) {
           clockAccumulator = 0;
           break;
         }
+        if (stepOverActive && cpu.pc == stepOverTarget) {
+          runEmulation = false;
+          stepOverActive = false;
+          clockAccumulator = 0;
+          break;
+        }
+
         int cycles = cpu_step(&cpu);
         clockAccumulator -= cycles;
         cyclesThisFrame += cycles;
@@ -413,6 +463,7 @@ int main(int argc, char *argv[]) {
     // Toolbar Shortcuts
     if (GuiButton((Rectangle){200, 5, 40, 20}, "Reset")) {
       runEmulation = false;
+      stepOverActive = false;
       soundRegL = 0;
       soundRegH = 0;
       waveFrequency = 0.0f;
@@ -436,6 +487,22 @@ int main(int argc, char *argv[]) {
     if (GuiButton((Rectangle){290, 5, 40, 20}, "Step")) {
       runEmulation = false;
       cpu_step(&cpu);
+    }
+
+    if (GuiButton((Rectangle){335, 5, 40, 20}, "NMI")) {
+      cpu_nmi(&cpu);
+      snprintf(statusMsg, 64, "NMI Triggered");
+    }
+
+    if (GuiButton((Rectangle){380, 5, 70, 20}, "Step Over")) {
+      if (cpu.memory[cpu.pc] == 0x20) { // JSR opcode
+        stepOverTarget = cpu.pc + 3;    // JSR is 3 bytes
+        stepOverActive = true;
+        runEmulation = true;
+      } else {
+        cpu_step(&cpu);
+        runEmulation = false;
+      }
     }
 
     // Disable main UI if dialog is open
@@ -687,6 +754,7 @@ int main(int argc, char *argv[]) {
     }
     if (GuiButton((Rectangle){memRect.x + 285, memRect.y + 60, 25, 25},
                   "...")) {
+      fileDialogMode = 0;
       OpenFileDialog();
     }
 
@@ -715,6 +783,8 @@ int main(int argc, char *argv[]) {
       bottomTab = 1;
     if (GuiButton((Rectangle){rightX + 170, tabY, 80, 20}, "Profiler"))
       bottomTab = 2;
+    if (GuiButton((Rectangle){rightX + 255, tabY, 80, 20}, "Zero Page"))
+      bottomTab = 3;
 
     if (bottomTab == 0) {
       GuiPanel(bottomRect, "Console Log ($E000)");
@@ -730,8 +800,20 @@ int main(int argc, char *argv[]) {
               asmSource, 1024, editAsm)) { // Use Multi-line text box
         editAsm = !editAsm;
       }
+      if (GuiButton((Rectangle){bottomRect.x + bottomRect.width - 195,
+                                bottomRect.y + 20, 60, 30},
+                    "Save")) {
+        fileDialogMode = 2;
+        OpenFileDialog();
+      }
       if (GuiButton((Rectangle){bottomRect.x + bottomRect.width - 130,
-                                bottomRect.y + 20, 120, 30},
+                                bottomRect.y + 20, 60, 30},
+                    "Load")) {
+        fileDialogMode = 1;
+        OpenFileDialog();
+      }
+      if (GuiButton((Rectangle){bottomRect.x + bottomRect.width - 65,
+                                bottomRect.y + 20, 60, 30},
                     "Compile")) {
         SimpleAssemble(&cpu, asmSource);
         snprintf(statusMsg, 64, "Assembled to $0600");
@@ -786,6 +868,39 @@ int main(int argc, char *argv[]) {
                  (int)bottomRect.x + 15, (int)bottomRect.y + 50 + i * 22 + 2,
                  10, WHITE);
       }
+    } else if (bottomTab == 3) {
+      GuiPanel(bottomRect, "Zero Page ($0000-$00FF)");
+      Rectangle view = {0};
+      Rectangle content = {0, 0, 380, 16 * 20 + 10};
+      Rectangle scrollPanelRect = {bottomRect.x, bottomRect.y + 20,
+                                   bottomRect.width, bottomRect.height - 20};
+
+      GuiScrollPanel(scrollPanelRect, NULL, content, &zpScroll, &view);
+
+      BeginScissorMode((int)view.x, (int)view.y, (int)view.width,
+                       (int)view.height);
+      int startX = (int)(scrollPanelRect.x + zpScroll.x + 10);
+      int startY = (int)(scrollPanelRect.y + zpScroll.y + 10);
+
+      for (int row = 0; row < 16; row++) {
+        int addr = row * 16;
+        DrawText(TextFormat("$%02X:", addr), startX, startY + row * 20, 10,
+                 GRAY);
+        for (int col = 0; col < 16; col++) {
+          int absAddr = addr + col;
+          uint8_t val = cpu.memory[absAddr];
+          Color c = WHITE;
+          if (absAddr == cpu.last_write_addr)
+            c = RED;
+          else if (absAddr == cpu.last_read_addr)
+            c = GREEN;
+          else if (val == 0)
+            c = DARKGRAY;
+          DrawText(TextFormat("%02X", val), startX + 40 + col * 20,
+                   startY + row * 20, 10, c);
+        }
+      }
+      EndScissorMode();
     }
 
     // --- File Dialog Overlay ---
@@ -825,15 +940,28 @@ int main(int argc, char *argv[]) {
             strncpy(fileDialog.dirPath, selected, 511);
             RefreshFileList();
           } else {
-            strncpy(fileBuffer, selected, 63);
-            CloseFileDialog();
-            // Auto-load
-            FILE *f = fopen(fileBuffer, "rb");
-            if (f) {
-              fread(&cpu.memory[memStart], 1, MEM_SIZE - memStart, f);
-              fclose(f);
-              snprintf(statusMsg, 64, "Loaded: %s", GetFileName(fileBuffer));
-              runEmulation = true;
+            if (fileDialogMode == 0) {
+              strncpy(fileBuffer, selected, 63);
+              CloseFileDialog();
+              // Auto-load
+              FILE *f = fopen(fileBuffer, "rb");
+              if (f) {
+                fread(&cpu.memory[memStart], 1, MEM_SIZE - memStart, f);
+                fclose(f);
+                snprintf(statusMsg, 64, "Loaded: %s", GetFileName(fileBuffer));
+                runEmulation = true;
+              }
+            } else if (fileDialogMode == 1) {
+              CloseFileDialog();
+              FILE *f = fopen(selected, "r");
+              if (f) {
+                memset(asmSource, 0, 1024);
+                size_t len = fread(asmSource, 1, 1023, f);
+                asmSource[len] = 0;
+                fclose(f);
+                snprintf(statusMsg, 64, "Loaded ASM: %s",
+                         GetFileName(selected));
+              }
             }
           }
         }
@@ -851,6 +979,7 @@ int main(int argc, char *argv[]) {
       GuiPanel(menuBounds, NULL);
       if (GuiButton((Rectangle){menuBounds.x + 5, menuBounds.y + 5, 110, 25},
                     "Load ROM...")) {
+        fileDialogMode = 0;
         OpenFileDialog();
         menuFileActive = false;
       }
@@ -914,10 +1043,20 @@ int main(int argc, char *argv[]) {
                             manBounds.width - 20, manBounds.height - 40};
 
       Font font = GuiGetFont();
-      Vector2 contentSize = MeasureTextEx(
+      Vector2 textSize = MeasureTextEx(
           font, MANUAL_TEXT, (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
           (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
-      Rectangle contentRec = {0, 0, contentSize.x + 20, contentSize.y + 20};
+
+      int lineCount = 1;
+      const char *ptr = MANUAL_TEXT;
+      while (*ptr) {
+        if (*ptr == '\n')
+          lineCount++;
+        ptr++;
+      }
+      float textHeight = lineCount * (GuiGetStyle(DEFAULT, TEXT_SIZE) +
+                                      GuiGetStyle(DEFAULT, TEXT_LINE_SPACING));
+      Rectangle contentRec = {0, 0, textSize.x + 20, textHeight + 20};
       Rectangle view = {0};
 
       GuiScrollPanel(panelRec, NULL, contentRec, &manualScroll, &view);
