@@ -162,8 +162,8 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
           }
 
           if (pasteLength > 0) {
-            for (int i = textLength + pasteLength; i > localCursorIndex; i--)
-              text[i] = text[i - pasteLength];
+            for (int i = textLength; i >= localCursorIndex; i--)
+              text[i + pasteLength] = text[i];
 
             for (int i = 0; i < pasteLength; i++)
               text[localCursorIndex + i] = pasteText[i];

@@ -2,16 +2,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug (Clang/LLVM)",
-            "type": "cppvsdbg",
+            "name": "Debug (LLDB)",
+            "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/emu6502.exe",
+            "program": "${workspaceFolder}/build/meow.exe",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "console": "externalTerminal",
-            "preLaunchTask": "CMake Build"
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
