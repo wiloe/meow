@@ -39,3 +39,30 @@ def lerp(start, end, amount):
     Linear interpolation.
     """
     return start + amount * (end - start)
+
+def clamp(value, min_val, max_val):
+    """
+    Restricts a value to be within a specified range.
+    """
+    return max(min_val, min(value, max_val))
+
+def get_angle(x1, y1, x2, y2):
+    """
+    Calculates the angle in radians between two points.
+    """
+    return np.arctan2(y2 - y1, x2 - x1)
+
+def normalize(x, y):
+    """
+    Normalizes a 2D vector.
+    """
+    m = np.hypot(x, y)
+    if m == 0:
+        return 0.0, 0.0
+    return x / m, y / m
+
+def check_circle_collision(x1, y1, r1, x2, y2, r2):
+    """
+    Checks for collision between two circles.
+    """
+    return get_distance(x1, y1, x2, y2) < (r1 + r2)

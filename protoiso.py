@@ -3,7 +3,7 @@ import random
 import numpy as np
 import json
 import os
-from utils import iso_to_screen
+from utils import iso_to_screen, normalize, clamp, get_angle, check_circle_collision, screen_to_iso
 
 # --- CONSTANTS ---
 SCREEN_WIDTH = 800
@@ -73,7 +73,10 @@ class IsoGame:
 
         self.recipes = [
             {'name': 'Mega Potion', 'result': 'item_mega_potion', 'ingredients': {'item_potion': 2}},
-            {'name': 'Ancient Scroll', 'result': 'item_scroll', 'ingredients': {'item_potion': 1, 'item_gem': 1}}
+            {'name': 'Ancient Scroll', 'result': 'item_scroll', 'ingredients': {'item_potion': 1, 'item_gem': 1}},
+            {'name': 'Bomb', 'result': 'item_bomb', 'ingredients': {'item_fiber': 2, 'item_stone': 1}},
+            {'name': 'Stone Axe', 'result': 'item_axe', 'ingredients': {'item_wood': 2, 'item_stone': 2}},
+            {'name': 'Stone Pick', 'result': 'item_pickaxe', 'ingredients': {'item_wood': 2, 'item_stone': 2}}
         ]
         self.assets = {}
         self.block_definitions = []
@@ -91,7 +94,7 @@ class IsoGame:
         self.fx_use = rl.load_sound("pop.wav")
         self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.0)
         
-        self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'campfire':-32}
+        self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'campfire':-32, 'bush':-32}
         self.draw_dispatch = {'player':self._draw_player, 'npc':self._draw_npc, 'obj':self._draw_obj, 'item':self._draw_item}
 
     def _generate_block_definitions(self):
@@ -139,11 +142,18 @@ class IsoGame:
         img_pine=rl.gen_image_color(64,128,rl.BLANK); rl.image_draw_rectangle(img_pine,28,90,8,20,COLOR_TREE_TRUNK); rl.image_draw_triangle(img_pine,rl.Vector2(32,20),rl.Vector2(8,70),rl.Vector2(56,70),COLOR_PINE_LEAVES); rl.image_draw_triangle(img_pine,rl.Vector2(32,40),rl.Vector2(12,90),rl.Vector2(52,90),COLOR_PINE_LEAVES); self.assets['pine_tree']=rl.load_texture_from_image(img_pine); rl.unload_image(img_pine)
         img_rock=rl.gen_image_color(64,64,rl.BLANK); rock_pts=[rl.Vector2(10,50),rl.Vector2(20,30),rl.Vector2(40,20),rl.Vector2(55,45),rl.Vector2(50,60),rl.Vector2(20,60)]; rl.image_draw_triangle(img_rock,rock_pts[0],rock_pts[1],rock_pts[5],COLOR_ROCK_BASE); rl.image_draw_triangle(img_rock,rock_pts[1],rock_pts[2],rock_pts[3],COLOR_ROCK_BASE); rl.image_draw_triangle(img_rock,rock_pts[1],rock_pts[3],rock_pts[5],COLOR_ROCK_BASE); self.assets['rock']=rl.load_texture_from_image(img_rock); rl.unload_image(img_rock)
         img_chest=rl.gen_image_color(64,64,rl.BLANK); rl.image_draw_rectangle(img_chest,16,32,32,24,COLOR_TREE_TRUNK); rl.image_draw_rectangle_lines(img_chest,rl.Rectangle(16,32,32,24),2,rl.fade(rl.BLACK,0.5)); rl.image_draw_rectangle(img_chest,28,42,8,8,rl.GOLD); self.assets['chest']=rl.load_texture_from_image(img_chest); rl.unload_image(img_chest)
+        img_bush = rl.gen_image_color(64, 64, rl.BLANK); rl.image_draw_circle(img_bush, 32, 48, 16, rl.GREEN); rl.image_draw_circle(img_bush, 24, 40, 12, rl.LIME); rl.image_draw_circle(img_bush, 40, 40, 12, rl.LIME); self.assets['bush'] = rl.load_texture_from_image(img_bush); rl.unload_image(img_bush)
         def create_character_sheet(body_color):
             s=rl.gen_image_color(64,64,rl.BLANK); rl.image_draw_rectangle(s,6,54,20,8,rl.Color(0,0,0,80)); rl.image_draw_rectangle(s,11,50,4,10,COLOR_PLAYER_PANTS); rl.image_draw_rectangle(s,17,50,4,10,COLOR_PLAYER_PANTS); rl.image_draw_rectangle(s,10,25,12,25,body_color); rl.image_draw_rectangle(s,10,13,12,12,COLOR_PLAYER_SKIN); rl.image_draw_rectangle(s,9,10,14,6,COLOR_PLAYER_HAIR); rl.image_draw_rectangle(s,32+6,54,20,8,rl.Color(0,0,0,80)); rl.image_draw_rectangle(s,32+9,50,4,10,COLOR_PLAYER_PANTS); rl.image_draw_rectangle(s,32+19,50,4,10,COLOR_PLAYER_PANTS); rl.image_draw_rectangle(s,32+10,25,12,25,body_color); rl.image_draw_rectangle(s,32+10,13,12,12,COLOR_PLAYER_SKIN); rl.image_draw_rectangle(s,32+9,10,14,6,COLOR_PLAYER_HAIR); return rl.load_texture_from_image(s)
         self.assets['player_sheet']=create_character_sheet(COLOR_PLAYER_BODY); self.assets['npc_sheet']=create_character_sheet(COLOR_NPC_BODY); self.assets['player_frames']=[rl.Rectangle(0,0,32,64),rl.Rectangle(32,0,32,64)]
         
         img_potion = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_potion, 16, 20, 10, rl.RED); rl.image_draw_rectangle(img_potion, 14, 6, 4, 8, rl.GRAY); self.assets['item_potion'] = rl.load_texture_from_image(img_potion); rl.unload_image(img_potion)
+        img_bomb = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_bomb, 16, 18, 10, rl.BLACK); rl.image_draw_circle(img_bomb, 12, 14, 2, rl.WHITE); rl.image_draw_line(img_bomb, 16, 8, 22, 2, rl.BEIGE); self.assets['item_bomb'] = rl.load_texture_from_image(img_bomb); rl.unload_image(img_bomb)
+        img_wood = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_rectangle(img_wood, 12, 4, 8, 24, rl.BROWN); rl.image_draw_circle(img_wood, 14, 8, 2, rl.DARKBROWN); self.assets['item_wood'] = rl.load_texture_from_image(img_wood); rl.unload_image(img_wood)
+        img_stone = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_stone, 16, 16, 10, rl.GRAY); rl.image_draw_circle(img_stone, 12, 12, 3, rl.LIGHTGRAY); self.assets['item_stone'] = rl.load_texture_from_image(img_stone); rl.unload_image(img_stone)
+        img_fiber = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_line(img_fiber, 8, 24, 24, 8, rl.LIME); rl.image_draw_line(img_fiber, 12, 24, 28, 8, rl.GREEN); self.assets['item_fiber'] = rl.load_texture_from_image(img_fiber); rl.unload_image(img_fiber)
+        img_axe = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_line(img_axe, 8, 28, 24, 8, rl.BROWN); rl.image_draw_circle(img_axe, 24, 8, 6, rl.GRAY); self.assets['item_axe'] = rl.load_texture_from_image(img_axe); rl.unload_image(img_axe)
+        img_pick = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_line(img_pick, 8, 28, 24, 8, rl.BROWN); rl.image_draw_line(img_pick, 18, 4, 28, 14, rl.GRAY); self.assets['item_pickaxe'] = rl.load_texture_from_image(img_pick); rl.unload_image(img_pick)
         img_scroll = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_rectangle(img_scroll, 6, 6, 20, 24, rl.BEIGE); rl.image_draw_rectangle_lines(img_scroll, rl.Rectangle(6, 6, 20, 24), 1, rl.BROWN); self.assets['item_scroll'] = rl.load_texture_from_image(img_scroll); rl.unload_image(img_scroll)
         img_mega = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_mega, 16, 20, 12, rl.PURPLE); rl.image_draw_rectangle(img_mega, 14, 4, 4, 10, rl.GOLD); self.assets['item_mega_potion'] = rl.load_texture_from_image(img_mega); rl.unload_image(img_mega)
         img_gem = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_triangle(img_gem, rl.Vector2(16, 4), rl.Vector2(4, 16), rl.Vector2(28, 16), rl.BLUE); rl.image_draw_triangle(img_gem, rl.Vector2(4, 16), rl.Vector2(16, 28), rl.Vector2(28, 16), rl.SKYBLUE); self.assets['item_gem'] = rl.load_texture_from_image(img_gem); rl.unload_image(img_gem)
@@ -189,9 +199,10 @@ class IsoGame:
                             if mat in['grass','dirt']and random.random()<0.1: self.objects['world'].append({'type':'tree','x':x,'y':y}); occupied['world'].add((x,y))
                             elif mat=='sand'and random.random()<0.05: self.objects['world'].append({'type':'rock','x':x,'y':y}); occupied['world'].add((x,y))
                             elif mat=='taiga_grass'and random.random()<0.15: self.objects['world'].append({'type':'pine_tree','x':x,'y':y}); occupied['world'].add((x,y))
+                            elif mat in ['grass', 'taiga_grass', 'swamp_mud'] and random.random() < 0.08: self.objects['world'].append({'type':'bush','x':x,'y':y}); occupied['world'].add((x,y))
                             elif self.chunk_grid[cy][cx] == 'swamp' and random.random() < 0.05: self.npcs['world'].append({'name': 'Slime', 'x': x, 'y': y, 'hp': 10, 'max_hp': 10, 'type': 'slime'})
                             elif self.chunk_grid[cy][cx] == 'taiga' and random.random() < 0.04: self.npcs['world'].append({'name': 'Goblin', 'x': x, 'y': y, 'hp': 15, 'max_hp': 15, 'type': 'goblin'})
-                            elif random.random() < 0.02: self.items['world'].append({'type': random.choice(['item_potion', 'item_scroll', 'item_food']), 'x': x, 'y': y})
+                            elif random.random() < 0.03: self.items['world'].append({'type': random.choice(['item_potion', 'item_scroll', 'item_food', 'item_wood', 'item_stone', 'item_fiber']), 'x': x, 'y': y})
         self.maps['world']=world_map; lx,ly=5,5
         while not self.block_definitions[self.maps['world'][ly, lx]]['walkable']: lx,ly=random.randint(3,MAP_SIZE-4),random.randint(3,MAP_SIZE-4)
         self.player['x'],self.player['y'],self.player['grid_x'],self.player['grid_y']=float(lx+1),float(ly),lx+1,ly
@@ -236,31 +247,53 @@ class IsoGame:
             match item['type']:
                 case 'item_potion':
                     if self.player['stats']['hp'] < self.player['stats']['max_hp']:
-                        self.player['stats']['hp'] = min(self.player['stats']['max_hp'], self.player['stats']['hp'] + 10)
+                        self.player['stats']['hp'] = clamp(self.player['stats']['hp'] + 10, 0, self.player['stats']['max_hp'])
                         self._spawn_particles(self.player['x'], self.player['y'], 20, rl.RED)
                         self.active_dialogue = {'text': "Used Potion (+10 HP)", 'time': rl.get_time() + 2.0}; used = True
                     else: self.active_dialogue = {'text': "HP full!", 'time': rl.get_time() + 1.0}
                 case 'item_mega_potion':
                     if self.player['stats']['hp'] < self.player['stats']['max_hp']:
-                        self.player['stats']['hp'] = min(self.player['stats']['max_hp'], self.player['stats']['hp'] + 50)
+                        self.player['stats']['hp'] = clamp(self.player['stats']['hp'] + 50, 0, self.player['stats']['max_hp'])
                         self._spawn_particles(self.player['x'], self.player['y'], 30, rl.PURPLE)
                         self.active_dialogue = {'text': "Used Mega Potion (+50 HP)", 'time': rl.get_time() + 2.0}; used = True
                     else: self.active_dialogue = {'text': "HP full!", 'time': rl.get_time() + 1.0}
                 case 'item_scroll': self.active_dialogue = {'text': "You read the scroll... It's blank.", 'time': rl.get_time() + 2.0}
                 case 'item_gem':
                     if self.player['stats']['weapon_durability'] < self.player['stats']['max_weapon_durability']:
-                        self.player['stats']['weapon_durability'] = min(self.player['stats']['max_weapon_durability'], self.player['stats']['weapon_durability'] + 20)
+                        self.player['stats']['weapon_durability'] = clamp(self.player['stats']['weapon_durability'] + 20, 0, self.player['stats']['max_weapon_durability'])
                         self.active_dialogue = {'text': "Repaired Weapon (+20)", 'time': rl.get_time() + 2.0}; used = True
                     else: self.active_dialogue = {'text': "Weapon Durability full!", 'time': rl.get_time() + 1.0}
                 case 'item_food':
                     if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
-                        self.player['stats']['hunger'] = min(self.player['stats'].get('max_hunger', 100), self.player['stats'].get('hunger', 0) + 20)
+                        self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 20, 0, self.player['stats'].get('max_hunger', 100))
                         self.active_dialogue = {'text': "Ate Food (+20 Hunger)", 'time': rl.get_time() + 2.0}; used = True
                 case 'item_fish':
                     if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
-                        self.player['stats']['hunger'] = min(self.player['stats'].get('max_hunger', 100), self.player['stats'].get('hunger', 0) + 15)
+                        self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 15, 0, self.player['stats'].get('max_hunger', 100))
                         self.active_dialogue = {'text': "Ate Fish (+15 Hunger)", 'time': rl.get_time() + 2.0}; used = True
                     else: self.active_dialogue = {'text': "Not hungry!", 'time': rl.get_time() + 1.0}
+                case 'item_bomb':
+                    used = True
+                    self.active_dialogue = {'text': "Bomb used!", 'time': rl.get_time() + 1.0}
+                    self._spawn_particles(self.player['x'], self.player['y'], 50, rl.ORANGE)
+                    px, py = self.player['x'], self.player['y']
+                    # Damage NPCs
+                    for npc in self.npcs[self.player['map']][:]:
+                        if np.hypot(npc['x'] - px, npc['y'] - py) < 3.0:
+                            npc['hp'] -= 50
+                            if npc['hp'] <= 0: self.npcs[self.player['map']].remove(npc); self.gain_xp(50)
+                    # Destroy Objects
+                    for obj in self.objects[self.player['map']][:]:
+                        if np.hypot(obj['x'] - px, obj['y'] - py) < 3.0:
+                            drop = None
+                            if obj['type'] in ['tree', 'pine_tree']: drop = 'item_wood'
+                            elif obj['type'] in ['rock', 'wall']: drop = 'item_stone'
+                            elif obj['type'] == 'bush': drop = 'item_fiber'
+                            
+                            if drop:
+                                self.objects[self.player['map']].remove(obj)
+                                self.items[self.player['map']].append({'type': drop, 'x': obj['x'], 'y': obj['y']})
+                                self._spawn_particles(obj['x'], obj['y'], 10, rl.GRAY)
             if used:
                 rl.play_sound(self.fx_use)
                 item['count'] -= 1; 
@@ -297,13 +330,13 @@ class IsoGame:
                 if obj['type'] == 'campfire': self._spawn_particles(obj['x'], obj['y'], 1, rl.ORANGE)
 
         if 'hunger' in self.player['stats']:
-            self.player['stats']['hunger'] = max(0, self.player['stats']['hunger'] - dt * 0.5)
+            self.player['stats']['hunger'] = clamp(self.player['stats']['hunger'] - dt * 0.5, 0, self.player['stats']['max_hunger'])
             if self.player['stats']['hunger'] <= 0 and rl.get_time() % 3.0 < dt:
-                self.player['stats']['hp'] = max(0, self.player['stats']['hp'] - 1)
+                self.player['stats']['hp'] = clamp(self.player['stats']['hp'] - 1, 0, self.player['stats']['max_hp'])
                 self.active_dialogue = {'text': "Starving! (-1 HP)", 'time': rl.get_time() + 1.0}
         
         if 'mana' in self.player['stats']:
-            self.player['stats']['mana'] = min(self.player['stats']['max_mana'], self.player['stats']['mana'] + dt * 0.5)
+            self.player['stats']['mana'] = clamp(self.player['stats']['mana'] + dt * 0.5, 0, self.player['stats']['max_mana'])
 
         # Fishing Logic
         if self.fishing['active']:
@@ -350,17 +383,35 @@ class IsoGame:
                 sp = self.to_screen(self.player['x'], self.player['y'])
                 mp = rl.get_screen_to_world_2d(rl.get_mouse_position(), self.camera)
                 dx, dy = mp.x - sp[0], mp.y - (sp[1] - 30)
-                dist = np.hypot(dx, dy)
-                if dist > 0:
-                    self.projectiles.append({'x': sp[0], 'y': sp[1]-30, 'vx': (dx/dist)*spell['speed'], 'vy': (dy/dist)*spell['speed'], 'life': 2.0, 'damage': spell['damage']})
+                vx, vy = normalize(dx, dy)
+                rot = get_angle(sp[0], sp[1]-30, mp.x, mp.y)
+                if vx != 0 or vy != 0:
+                    self.projectiles.append({'x': sp[0], 'y': sp[1]-30, 'vx': vx*spell['speed'], 'vy': vy*spell['speed'], 'life': 2.0, 'damage': spell['damage'], 'rotation': rot})
             else: self.active_dialogue = {'text': "Not enough Mana!", 'time': rl.get_time() + 1.0}
 
         # Update Projectiles
         for p in self.projectiles:
             p['x'] += p['vx'] * dt; p['y'] += p['vy'] * dt; p['life'] -= dt
+            
+            gx, gy = screen_to_iso(p['x'], p['y'], TILE_WIDTH, TILE_HEIGHT)
+            igx, igy = int(gx + 0.5), int(gy + 0.5)
+            hit_wall = False
+            if self.player['map'] in self.maps:
+                current_map = self.maps[self.player['map']]
+                if not (0 <= igx < len(current_map) and 0 <= igy < len(current_map)): hit_wall = True
+                elif not self.block_definitions[current_map[igy, igx]]['walkable']: hit_wall = True
+                else:
+                    for obj in self.objects[self.player['map']]:
+                        if obj.get('type') in ['tree', 'pine_tree', 'rock', 'wall'] and int(obj['x']) == igx and int(obj['y']) == igy: hit_wall = True; break
+            
+            if hit_wall:
+                p['life'] = 0
+                for _ in range(10): self.particles.append({'x': p['x'], 'y': p['y'], 'vx': random.uniform(-60, 60), 'vy': random.uniform(-60, 60), 'life': random.uniform(0.3, 0.6), 'color': rl.GRAY})
+                continue
+
             for npc in self.npcs[self.player['map']]:
                 nsx, nsy = self.to_screen(npc['x'], npc['y'])
-                if np.hypot(p['x'] - nsx, p['y'] - (nsy - 30)) < 30:
+                if check_circle_collision(p['x'], p['y'], 10, nsx, nsy - 30, 20):
                     npc['hp'] -= p['damage']; p['life'] = 0
                     self._spawn_particles(npc['x'], npc['y'], 10, rl.ORANGE)
                     if npc['hp'] <= 0: self.npcs[self.player['map']].remove(npc); self.gain_xp(50)
@@ -395,6 +446,7 @@ class IsoGame:
                     self.player['last_attack'] = rl.get_time()
                     self.player['stats']['weapon_durability'] -= 1
                     px, py = self.player['grid_x'], self.player['grid_y']
+                    inv_types = [i['type'] for i in self.player['inventory']]
                     hit_npc = False
                     for npc in self.npcs[self.player['map']]:
                         if abs(int(npc['x'])-px) <= 1 and abs(int(npc['y'])-py) <= 1:
@@ -405,14 +457,31 @@ class IsoGame:
                                 if "LEVEL UP" not in self.active_dialogue.get('text',''): self.active_dialogue = {'text': f"Defeated {npc['name']}! (+50 XP)", 'time': rl.get_time() + 2.0}
                             hit_npc = True
                             break
-                    
                     if not hit_npc:
-                        for obj in self.objects[self.player['map']]:
-                            if obj['type'] == 'rock' and abs(obj['x']-px) <= 1 and abs(obj['y']-py) <= 1:
-                                self.objects[self.player['map']].remove(obj)
-                                self.items[self.player['map']].append({'type': 'item_gem', 'x': obj['x'], 'y': obj['y']})
-                                self.active_dialogue = {'text': "Smashed rock! Found a Gem!", 'time': rl.get_time() + 2.0}
-                                self._spawn_particles(obj['x'], obj['y'], 10, rl.GRAY)
+                        for obj in self.objects[self.player['map']][:]:
+                            if abs(obj['x']-px) <= 1 and abs(obj['y']-py) <= 1:
+                                if obj['type'] == 'rock' and 'item_pickaxe' in inv_types:
+                                    self.objects[self.player['map']].remove(obj)
+                                    self.items[self.player['map']].append({'type': random.choice(['item_stone', 'item_gem']), 'x': obj['x'], 'y': obj['y']})
+                                    self.active_dialogue = {'text': "Mined rock!", 'time': rl.get_time() + 1.0}
+                                    self._spawn_particles(obj['x'], obj['y'], 10, rl.GRAY)
+                        for obj in self.objects[self.player['map']][:]:
+                            if abs(obj['x']-px) <= 1 and abs(obj['y']-py) <= 1:
+                                if obj['type'] == 'rock' and 'item_pickaxe' in inv_types:
+                                    self.objects[self.player['map']].remove(obj)
+                                    self.items[self.player['map']].append({'type': random.choice(['item_stone', 'item_gem']), 'x': obj['x'], 'y': obj['y']})
+                                    self.active_dialogue = {'text': "Mined rock!", 'time': rl.get_time() + 1.0}
+                                    self._spawn_particles(obj['x'], obj['y'], 10, rl.GRAY)
+                                elif obj['type'] in ['tree', 'pine_tree'] and 'item_axe' in inv_types:
+                                    self.objects[self.player['map']].remove(obj)
+                                    self.items[self.player['map']].append({'type': 'item_wood', 'x': obj['x'], 'y': obj['y']})
+                                    self.active_dialogue = {'text': "Chopped tree!", 'time': rl.get_time() + 1.0}
+                                    self._spawn_particles(obj['x'], obj['y'], 10, rl.BROWN)
+                                elif obj['type'] == 'bush':
+                                    self.objects[self.player['map']].remove(obj)
+                                    self.items[self.player['map']].append({'type': 'item_fiber', 'x': obj['x'], 'y': obj['y']})
+                                    self.active_dialogue = {'text': "Collected fiber!", 'time': rl.get_time() + 1.0}
+                                    self._spawn_particles(obj['x'], obj['y'], 5, rl.GREEN)
                                 break
 
         if rl.is_key_pressed(rl.KEY_E):
@@ -483,14 +552,42 @@ class IsoGame:
         sw, sh = rl.get_screen_width(), rl.get_screen_height()
         self.camera.offset = rl.Vector2(sw // 2, sh // 2)
         
-        brightness = 1.0
         if self.player.get('map') == 'cave':
-            brightness = 0.2
             bg_color = COLOR_BG
+            tint = rl.Color(100, 100, 120, 255)
+            brightness = 0.2
         else:
-            brightness = (np.sin((self.day_time - 0.25) * np.pi * 2) + 1) / 2
-            bg_color = rl.Color(int(20 + 80 * brightness), int(20 + 160 * brightness), int(40 + 215 * brightness), 255)
-        tint = rl.Color(int(255*brightness), int(255*brightness), int(255*brightness), 255)
+            # Day/Night Cycle
+            t = self.day_time
+            brightness = (np.sin((t - 0.25) * np.pi * 2) + 1) / 2
+            brightness = max(0.15, brightness)
+
+            # Base colors
+            nc = (30, 30, 90) # Night
+            dc = (255, 255, 255) # Day
+            
+            r = int(nc[0] + (dc[0] - nc[0]) * brightness)
+            g = int(nc[1] + (dc[1] - nc[1]) * brightness)
+            b = int(nc[2] + (dc[2] - nc[2]) * brightness)
+
+            # Sunset/Sunrise tint
+            d1, d2 = abs(t - 0.25), abs(t - 0.75)
+            sunset_factor = max(0, 1.0 - min(d1, d2) * 8.0)
+            
+            if sunset_factor > 0:
+                r = min(255, int(r + 80 * sunset_factor))
+                g = max(0, int(g - 10 * sunset_factor))
+                b = max(0, int(b - 30 * sunset_factor))
+            
+            tint = rl.Color(r, g, b, 255)
+            
+            bg_r = int(20 + 80 * brightness)
+            bg_g = int(20 + 160 * brightness)
+            bg_b = int(40 + 215 * brightness)
+            if sunset_factor > 0:
+                 bg_r = min(255, int(bg_r + 60 * sunset_factor))
+                 bg_g = max(0, int(bg_g - 10 * sunset_factor))
+            bg_color = rl.Color(bg_r, bg_g, bg_b, 255)
             
         rl.begin_drawing(); rl.clear_background(bg_color); rl.begin_mode_2d(self.camera)
         if self.player.get('map')in self.maps:
@@ -511,7 +608,8 @@ class IsoGame:
         for p in self.particles:
             rl.draw_rectangle(int(p['x']), int(p['y']), 4, 4, rl.fade(p['color'], p['life']))
         for p in self.projectiles:
-            rl.draw_texture(self.assets['projectile_fireball'], int(p['x']-16), int(p['y']-16), rl.WHITE)
+            tex = self.assets['projectile_fireball']
+            rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(p['x'], p['y'], tex.width, tex.height), rl.Vector2(tex.width/2, tex.height/2), np.degrees(p['rotation']), rl.WHITE)
         rl.end_mode_2d()
         
         # Lighting System

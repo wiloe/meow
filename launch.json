@@ -8,6 +8,15 @@
             "program": "${workspaceFolder}/build/meow.exe",
             "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python 3.13 (.venv)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
