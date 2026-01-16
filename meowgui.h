@@ -7,11 +7,11 @@
 // Helper to check for keywords
 static bool IsAsmKeyword(const char *word) {
   static const char *keywords[] = {
-      "LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TAY", "TXA", "TYA",
-      "TSX", "TXS", "PHA", "PHP", "PLA", "PLP", "AND", "EOR", "ORA", "BIT",
-      "ADC", "SBC", "CMP", "CPX", "CPY", "INC", "DEC", "INX", "DEX", "INY",
-      "DEY", "ASL", "LSR", "ROL", "ROR", "JMP", "JSR", "RTS", "BCC", "BCS",
-      "BEQ", "BMI", "BNE", "BPL", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV",
+      "LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TAY",  "TXA",  "TYA",
+      "TSX", "TXS", "PHA", "PHP", "PLA", "PLP", "AND", "EOR",  "ORA",  "BIT",
+      "ADC", "SBC", "CMP", "CPX", "CPY", "INC", "DEC", "INX",  "DEX",  "INY",
+      "DEY", "ASL", "LSR", "ROL", "ROR", "JMP", "JSR", "RTS",  "BCC",  "BCS",
+      "BEQ", "BMI", "BNE", "BPL", "BVC", "BVS", "CLC", "CLD",  "CLI",  "CLV",
       "SEC", "SED", "SEI", "BRK", "NOP", "RTI", "ORG", "BYTE", "WORD", NULL};
   char upper[16];
   int i = 0;
@@ -396,9 +396,9 @@ int GuiTextBoxMulti(Rectangle bounds, char *text, int textSize, bool editMode) {
                    (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
                    (float)GuiGetStyle(DEFAULT, TEXT_SPACING), col);
 
-        Vector2 size = MeasureTextEx(font, chunk,
-                                     (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
-                                     (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
+        Vector2 size =
+            MeasureTextEx(font, chunk, (float)GuiGetStyle(DEFAULT, TEXT_SIZE),
+                          (float)GuiGetStyle(DEFAULT, TEXT_SPACING));
         currentX += size.x;
         k += chunkLen;
       }
