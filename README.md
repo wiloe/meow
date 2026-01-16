@@ -24,3 +24,38 @@ A simple isometric RPG engine built with Python and PyRay.
 
 *   **Bounding Box Overlay:** Press `B` to toggle. Green indicates safe, red indicates collision.
 *   **Un-blocking Exits:** Map generation logic ensures exits are accessible.
+
+**Files:**
+*   `protoiso.py`
+*   `utils.py`
+
+### Particle System Simulator
+A simulation of particle physics that allows users to configure various parameters to observe different behaviors.
+
+**Features:**
+*   Configurable particle variables.
+
+**Files:**
+*   `particalsys.py`
+
+### Wave Music Generator
+A utility script designed to programmatically generate audio files in the `.wav` format.
+
+**Files:**
+*   `generate_waves.py`
+
+### Mandelbrot Set Visualizer
+A script to calculate and visualize the Mandelbrot set fractal.
+
+**Files:**
+*   `mandlebrot.py`
+
+### Sol Runner
+A space trading and combat simulator.
+
+**Features:**
+*   Trading mechanics.
+*   Combat system.
+
+**Files:**
+*   `sol_runner.py`

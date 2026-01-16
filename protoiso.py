@@ -1,8 +1,9 @@
 import pyray as rl
 import random
-import math
+import numpy as np
 import json
 import os
+from utils import iso_to_screen
 
 # --- CONSTANTS ---
 SCREEN_WIDTH = 800
@@ -148,6 +149,7 @@ class IsoGame:
         img_gem = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_triangle(img_gem, rl.Vector2(16, 4), rl.Vector2(4, 16), rl.Vector2(28, 16), rl.BLUE); rl.image_draw_triangle(img_gem, rl.Vector2(4, 16), rl.Vector2(16, 28), rl.Vector2(28, 16), rl.SKYBLUE); self.assets['item_gem'] = rl.load_texture_from_image(img_gem); rl.unload_image(img_gem)
         img_campfire = rl.gen_image_color(64, 64, rl.BLANK); rl.image_draw_circle(img_campfire, 32, 48, 12, rl.BROWN); rl.image_draw_triangle(img_campfire, rl.Vector2(32, 20), rl.Vector2(20, 48), rl.Vector2(44, 48), rl.ORANGE); self.assets['campfire'] = rl.load_texture_from_image(img_campfire); rl.unload_image(img_campfire)
         img_slime = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_slime, 16, 20, 10, rl.LIME); rl.image_draw_circle(img_slime, 12, 18, 2, rl.BLACK); rl.image_draw_circle(img_slime, 20, 18, 2, rl.BLACK); self.assets['slime'] = rl.load_texture_from_image(img_slime); rl.unload_image(img_slime)
+        img_goblin = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_goblin, 16, 20, 10, rl.GREEN); rl.image_draw_circle(img_goblin, 12, 18, 2, rl.RED); rl.image_draw_circle(img_goblin, 20, 18, 2, rl.RED); rl.image_draw_triangle(img_goblin, rl.Vector2(6, 20), rl.Vector2(2, 10), rl.Vector2(10, 16), rl.GREEN); rl.image_draw_triangle(img_goblin, rl.Vector2(26, 20), rl.Vector2(22, 16), rl.Vector2(30, 10), rl.GREEN); self.assets['goblin'] = rl.load_texture_from_image(img_goblin); rl.unload_image(img_goblin)
         img_food = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_food, 16, 16, 10, rl.ORANGE); rl.image_draw_circle(img_food, 12, 12, 3, rl.RED); self.assets['item_food'] = rl.load_texture_from_image(img_food); rl.unload_image(img_food)
         img_fish = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_fish, 16, 16, 12, rl.BLUE); rl.image_draw_triangle(img_fish, rl.Vector2(26, 16), rl.Vector2(32, 10), rl.Vector2(32, 22), rl.BLUE); self.assets['item_fish'] = rl.load_texture_from_image(img_fish); rl.unload_image(img_fish)
         img_fireball = rl.gen_image_color(32, 32, rl.BLANK); rl.image_draw_circle(img_fireball, 16, 16, 10, rl.ORANGE); rl.image_draw_circle(img_fireball, 16, 16, 7, rl.RED); self.assets['projectile_fireball'] = rl.load_texture_from_image(img_fireball); rl.unload_image(img_fireball)
@@ -175,28 +177,29 @@ class IsoGame:
     def init_game_world(self):
         self.maps,self.objects,self.npcs,self.items,occupied={}, {'world':[],'cave':[]},{'world':[],'cave':[]},{'world':[],'cave':[]},{'world':set(),'cave':set()}
         self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[],'quests':[],'last_attack':0}
-        biomes={'temperate':{'base':16,'range':8},'desert':{'base':32,'range':8},'taiga':{'base':48,'range':8},'swamp':{'base':64,'range':16}}; self.chunk_grid=[[random.choice(list(biomes.keys()))for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]; world_map=[[{}for _ in range(MAP_SIZE)]for _ in range(MAP_SIZE)]
+        biomes={'temperate':{'base':16,'range':8},'desert':{'base':32,'range':8},'taiga':{'base':48,'range':8},'swamp':{'base':64,'range':16}}; self.chunk_grid=[[random.choice(list(biomes.keys()))for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]; world_map=np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
         for cy in range(WORLD_CHUNKS):
             for cx in range(WORLD_CHUNKS):
                 b_info=biomes[self.chunk_grid[cy][cx]]
                 for yo in range(CHUNK_SIZE):
                     for xo in range(CHUNK_SIZE):
-                        x,y=cx*CHUNK_SIZE+xo,cy*CHUNK_SIZE+yo; b_id=b_info['base']+random.randint(0,b_info['range']-1); world_map[y][x]={'block_id':b_id}
+                        x,y=cx*CHUNK_SIZE+xo,cy*CHUNK_SIZE+yo; b_id=b_info['base']+random.randint(0,b_info['range']-1); world_map[y, x]=b_id
                         if self.block_definitions[b_id]['walkable']:
                             mat=self.block_definitions[b_id]['material']
                             if mat in['grass','dirt']and random.random()<0.1: self.objects['world'].append({'type':'tree','x':x,'y':y}); occupied['world'].add((x,y))
                             elif mat=='sand'and random.random()<0.05: self.objects['world'].append({'type':'rock','x':x,'y':y}); occupied['world'].add((x,y))
                             elif mat=='taiga_grass'and random.random()<0.15: self.objects['world'].append({'type':'pine_tree','x':x,'y':y}); occupied['world'].add((x,y))
                             elif self.chunk_grid[cy][cx] == 'swamp' and random.random() < 0.05: self.npcs['world'].append({'name': 'Slime', 'x': x, 'y': y, 'hp': 10, 'max_hp': 10, 'type': 'slime'})
+                            elif self.chunk_grid[cy][cx] == 'taiga' and random.random() < 0.04: self.npcs['world'].append({'name': 'Goblin', 'x': x, 'y': y, 'hp': 15, 'max_hp': 15, 'type': 'goblin'})
                             elif random.random() < 0.02: self.items['world'].append({'type': random.choice(['item_potion', 'item_scroll', 'item_food']), 'x': x, 'y': y})
         self.maps['world']=world_map; lx,ly=5,5
-        while not self.block_definitions[self.maps['world'][ly][lx]['block_id']]['walkable']: lx,ly=random.randint(3,MAP_SIZE-4),random.randint(3,MAP_SIZE-4)
+        while not self.block_definitions[self.maps['world'][ly, lx]]['walkable']: lx,ly=random.randint(3,MAP_SIZE-4),random.randint(3,MAP_SIZE-4)
         self.player['x'],self.player['y'],self.player['grid_x'],self.player['grid_y']=float(lx+1),float(ly),lx+1,ly
         self.npcs['world'].append({'name':'Guide','x':lx+2,'y':ly+2,'hp':20,'max_hp':20,'quest':{'req':'item_potion','desc':'Fetch Potion','completed':False}})
         self.npcs['world'].append({'name':'Merchant','x':lx+3,'y':ly,'hp':20,'max_hp':20})
         self.objects['world'].append({'type':'campfire','x':lx+1,'y':ly+1}); occupied['world'].add((lx+1,ly+1))
         self.objects['world'].append({'type':'ladder','x':lx,'y':ly,'target_map':'cave','target_pos':(2,2)}); occupied['world'].add((lx,ly))
-        cave_map,conceptual_cave_map=[[{'block_id':0}for _ in range(CAVE_MAP_SIZE)]for _ in range(CAVE_MAP_SIZE)],[['cave_wall'for _ in range(CAVE_MAP_SIZE)]for _ in range(CAVE_MAP_SIZE)]; px,py=CAVE_MAP_SIZE//2,CAVE_MAP_SIZE//2
+        cave_map,conceptual_cave_map=np.zeros((CAVE_MAP_SIZE, CAVE_MAP_SIZE), dtype=int),[['cave_wall'for _ in range(CAVE_MAP_SIZE)]for _ in range(CAVE_MAP_SIZE)]; px,py=CAVE_MAP_SIZE//2,CAVE_MAP_SIZE//2
         for _ in range(150): conceptual_cave_map[py][px]='stone_floor'; dx,dy=random.choice([(0,1),(0,-1),(1,0),(-1,0)]); px,py=max(1,min(CAVE_MAP_SIZE-2,px+dx)),max(1,min(CAVE_MAP_SIZE-2,py+dy))
         for y in range(CAVE_MAP_SIZE):
             for x in range(CAVE_MAP_SIZE):
@@ -206,7 +209,7 @@ class IsoGame:
         self.objects['cave']=[o for o in self.objects['cave']if o.get('type')!='wall'or o['x']!=2 or o['y']!=2]
         self._generate_world_map_texture()
 
-    def to_screen(self, gx, gy): return (gx-gy)*(TILE_WIDTH/2), (gx+gy)*(TILE_HEIGHT/2)
+    def to_screen(self, gx, gy): return iso_to_screen(gx, gy, TILE_WIDTH, TILE_HEIGHT)
     def change_map(self, t_map, t_pos): self.player['map']=t_map; self.player['x'],self.player['y']=float(t_pos[0]),float(t_pos[1]); self.player['grid_x'],self.player['grid_y']=t_pos[0],t_pos[1]; self.player['moving']=False
 
     def gain_xp(self, amount):
@@ -331,7 +334,7 @@ class IsoGame:
                     if dx == 0 and dy == 0: continue
                     tx, ty = px + dx, py + dy
                     if 0 <= tx < len(self.maps[self.player['map']]) and 0 <= ty < len(self.maps[self.player['map']]):
-                        mat = self.block_definitions[self.maps[self.player['map']][ty][tx]['block_id']]['material']
+                        mat = self.block_definitions[self.maps[self.player['map']][ty, tx]]['material']
                         if 'water' in mat: near_water = True
             if near_water:
                 if self.weather in ['rainy', 'stormy']: wait *= 0.5
@@ -347,7 +350,7 @@ class IsoGame:
                 sp = self.to_screen(self.player['x'], self.player['y'])
                 mp = rl.get_screen_to_world_2d(rl.get_mouse_position(), self.camera)
                 dx, dy = mp.x - sp[0], mp.y - (sp[1] - 30)
-                dist = math.sqrt(dx*dx + dy*dy)
+                dist = np.hypot(dx, dy)
                 if dist > 0:
                     self.projectiles.append({'x': sp[0], 'y': sp[1]-30, 'vx': (dx/dist)*spell['speed'], 'vy': (dy/dist)*spell['speed'], 'life': 2.0, 'damage': spell['damage']})
             else: self.active_dialogue = {'text': "Not enough Mana!", 'time': rl.get_time() + 1.0}
@@ -357,12 +360,27 @@ class IsoGame:
             p['x'] += p['vx'] * dt; p['y'] += p['vy'] * dt; p['life'] -= dt
             for npc in self.npcs[self.player['map']]:
                 nsx, nsy = self.to_screen(npc['x'], npc['y'])
-                if math.hypot(p['x'] - nsx, p['y'] - (nsy - 30)) < 30:
+                if np.hypot(p['x'] - nsx, p['y'] - (nsy - 30)) < 30:
                     npc['hp'] -= p['damage']; p['life'] = 0
                     self._spawn_particles(npc['x'], npc['y'], 10, rl.ORANGE)
                     if npc['hp'] <= 0: self.npcs[self.player['map']].remove(npc); self.gain_xp(50)
                     break
         self.projectiles = [p for p in self.projectiles if p['life'] > 0]
+
+        # NPC Logic (Goblin AI)
+        if self.player['map'] in self.npcs:
+            for npc in self.npcs[self.player['map']]:
+                if npc.get('type') == 'goblin':
+                    dist = np.hypot(self.player['x'] - npc['x'], self.player['y'] - npc['y'])
+                    if 0.8 < dist < 8.0:
+                        speed = 2.0 * dt
+                        dx = (self.player['x'] - npc['x']) / dist * speed
+                        dy = (self.player['y'] - npc['y']) / dist * speed
+                        nx, ny = npc['x'] + dx, npc['y'] + dy
+                        if 0 <= int(nx) < len(self.maps[self.player['map']]) and 0 <= int(ny) < len(self.maps[self.player['map']]):
+                            b_id = self.maps[self.player['map']][int(ny), int(nx)]
+                            if self.block_definitions[b_id]['walkable']:
+                                npc['x'], npc['y'] = nx, ny
 
         self.day_time = (self.day_time + dt / self.day_duration) % 1.0
         if self.active_dialogue and rl.get_time() > self.active_dialogue['time']: self.active_dialogue = None
@@ -379,7 +397,7 @@ class IsoGame:
                     px, py = self.player['grid_x'], self.player['grid_y']
                     hit_npc = False
                     for npc in self.npcs[self.player['map']]:
-                        if abs(npc['x']-px) <= 1 and abs(npc['y']-py) <= 1:
+                        if abs(int(npc['x'])-px) <= 1 and abs(int(npc['y'])-py) <= 1:
                             npc['hp'] -= self.player['stats']['str']
                             self.active_dialogue = {'text': f"Hit {npc['name']} for {self.player['stats']['str']} dmg!", 'time': rl.get_time() + 1.0}
                             if npc['hp'] <= 0:
@@ -400,7 +418,7 @@ class IsoGame:
         if rl.is_key_pressed(rl.KEY_E):
             px,py,cmap=self.player['grid_x'],self.player['grid_y'],self.player['map']
             for npc in self.npcs[cmap]:
-                if abs(npc['x']-px) <= 1 and abs(npc['y']-py) <= 1:
+                if abs(int(npc['x'])-px) <= 1 and abs(int(npc['y'])-py) <= 1:
                     if npc.get('name') == 'Merchant':
                         self.game_state = 'SHOP'
                         return
@@ -454,11 +472,11 @@ class IsoGame:
         if self.player['map'] not in self.maps: return
         current_map=self.maps[self.player['map']]; map_size=len(current_map)
         if not (0<=tx<map_size and 0<=ty<map_size) or (tx==self.player['grid_x'] and ty==self.player['grid_y']): return
-        b_id=current_map[ty][tx]['block_id']
+        b_id=current_map[ty, tx]
         if not self.block_definitions[b_id]['walkable']: return
         for e_list in[self.objects[self.player['map']],self.npcs[self.player['map']]]:
             for e in e_list:
-                if e.get('type') not in['ladder','chest']and e['x']==tx and e['y']==ty: return
+                if e.get('type') not in['ladder','chest']and int(e['x'])==tx and int(e['y'])==ty: return
         self.player.update({'moving':True,'start_pos':(self.player['x'],self.player['y']),'target_pos':(tx,ty),'move_start_time':rl.get_time()})
 
     def _draw_gameplay(self):
@@ -470,7 +488,7 @@ class IsoGame:
             brightness = 0.2
             bg_color = COLOR_BG
         else:
-            brightness = (math.sin((self.day_time - 0.25) * math.pi * 2) + 1) / 2
+            brightness = (np.sin((self.day_time - 0.25) * np.pi * 2) + 1) / 2
             bg_color = rl.Color(int(20 + 80 * brightness), int(20 + 160 * brightness), int(40 + 215 * brightness), 255)
         tint = rl.Color(int(255*brightness), int(255*brightness), int(255*brightness), 255)
             
@@ -479,7 +497,7 @@ class IsoGame:
             current_map=self.maps[self.player['map']]; map_size=len(current_map)
             for y in range(map_size):
                 for x in range(map_size):
-                    sx,sy=self.to_screen(x,y); b_id=current_map[y][x].get('block_id',0)
+                    sx,sy=self.to_screen(x,y); b_id=current_map[y, x]
                     if b_id<len(self.assets['blocks']): rl.draw_texture(self.assets['blocks'][b_id],int(sx-TILE_WIDTH//2),int(sy-TILE_HEIGHT//2),tint)
         render_list=[{'entity_type':'player',**self.player,'depth':self.player.get('x',0)+self.player.get('y',0)+0.6}]
         if self.player.get('map')in self.npcs: render_list.extend([{'entity_type':'npc',**n,'depth':n['x']+n['y']+0.5}for n in self.npcs[self.player['map']]])
@@ -499,7 +517,7 @@ class IsoGame:
         # Lighting System
         if brightness < 1.0:
             rl.begin_blend_mode(rl.BLEND_ADDITIVE)
-            torch_radius = 200 + math.sin(rl.get_time() * 10) * 5
+            torch_radius = 200 + np.sin(rl.get_time() * 10) * 5
             rl.draw_circle_gradient(sw // 2, sh // 2 - 25, torch_radius, rl.Color(255, 170, 80, int(200 * (1.0 - brightness))), rl.Color(0, 0, 0, 0))
             rl.end_blend_mode()
             
@@ -535,7 +553,8 @@ class IsoGame:
         rl.end_drawing()
 
     def save_game(self):
-        data = {'player':self.player,'maps':self.maps,'objects':self.objects,'npcs':self.npcs,'items':self.items,'day_time':self.day_time,'chunk_grid':self.chunk_grid,'weather':self.weather}
+        serializable_maps = {k: v.tolist() for k, v in self.maps.items()}
+        data = {'player':self.player,'maps':serializable_maps,'objects':self.objects,'npcs':self.npcs,'items':self.items,'day_time':self.day_time,'chunk_grid':self.chunk_grid,'weather':self.weather}
         try:
             with open('savegame.json','w')as f: json.dump(data,f)
         except Exception as e: print(f"Error saving: {e}")
@@ -544,8 +563,7 @@ class IsoGame:
         if not os.path.exists('savegame.json'): return
         try:
             with open('savegame.json','r')as f:
-                data=json.load(f); self.player=data['player']; self.maps=data['maps']; self.objects=data['objects']; self.npcs=data['npcs']; self.items=data['items']; self.day_time=data['day_time']
-                data=json.load(f); self.player=data['player']; self.maps=data['maps']; self.objects=data['objects']; self.npcs=data['npcs']; self.items=data['items']; self.day_time=data['day_time']; self.weather=data.get('weather','sunny')
+                data=json.load(f); self.player=data['player']; self.maps={k: np.array(v, dtype=int) for k, v in data['maps'].items()}; self.objects=data['objects']; self.npcs=data['npcs']; self.items=data['items']; self.day_time=data['day_time']; self.weather=data.get('weather','sunny')
                 if 'weapon_durability' not in self.player['stats']: self.player['stats'].update({'weapon_durability':50,'max_weapon_durability':50})
                 if 'gold' not in self.player['stats']: self.player['stats']['gold'] = 0
                 if 'hunger' not in self.player['stats']: self.player['stats'].update({'hunger': 100, 'max_hunger': 100})
@@ -691,7 +709,7 @@ class IsoGame:
     def _draw_map_tab(self, rect):
         rl.draw_text("World Map",int(rect.x),int(rect.y),20,rl.BLACK)
         if self.world_map_texture:
-            brightness = (math.sin((self.day_time - 0.25) * math.pi * 2) + 1) / 2
+            brightness = (np.sin((self.day_time - 0.25) * np.pi * 2) + 1) / 2
             map_tint = rl.Color(int(255*max(0.4, brightness)), int(255*max(0.4, brightness)), int(255*max(0.4, brightness)), 255)
             map_tex=self.world_map_texture.texture; dest_w,dest_h=rect.width,rect.height-30; scale=min(dest_w/map_tex.width,dest_h/map_tex.height); draw_w,draw_h=map_tex.width*scale,map_tex.height*scale; draw_x,draw_y=rect.x+(dest_w-draw_w)/2,rect.y+30+(dest_h-draw_h)/2
             rl.draw_texture_pro(map_tex,rl.Rectangle(0,0,map_tex.width,-map_tex.height),rl.Rectangle(draw_x,draw_y,draw_w,draw_h),rl.Vector2(0,0),0.0,map_tint)
@@ -720,6 +738,7 @@ class IsoGame:
     def _draw_player(self, item, sx, sy, color): rl.draw_texture_rec(self.assets['player_sheet'],self.assets['player_frames'][item.get('anim_frame',0)],rl.Vector2(int(sx-16),int(sy-55)),color)
     def _draw_npc(self, item, sx, sy, color):
         if item.get('type') == 'slime': rl.draw_texture(self.assets['slime'], int(sx-16), int(sy-24), color)
+        elif item.get('type') == 'goblin': rl.draw_texture(self.assets['goblin'], int(sx-16), int(sy-24), color)
         else: rl.draw_texture_rec(self.assets['npc_sheet'],self.assets['player_frames'][0],rl.Vector2(int(sx-16),int(sy-55)),color)
         rl.draw_text(item['name'],int(sx-rl.measure_text(item['name'],10)/2),int(sy-65),10,color)
         if item.get('hp') < item.get('max_hp'):
