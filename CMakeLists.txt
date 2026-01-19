@@ -37,8 +37,7 @@ add_custom_command(
     DEPENDS icon_gen
     COMMENT "Generating 6502 icon"
 )
-
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/meow.rc "IDI_ICON1 ICON \"${CMAKE_CURRENT_BINARY_DIR}/icon.ico\"")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/meow.rc "IDI_ICON1 ICON \"icon.ico\"")
 
 # --- Main Emulator Target ---
 add_executable(meow
@@ -50,7 +49,7 @@ add_executable(meow
 )
 
 # Include current directory for header files (cpu.h, debugger.h, etc.)
-target_include_directories(meow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(meow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 # Link Raylib
 target_link_libraries(meow PRIVATE raylib)
