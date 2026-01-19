@@ -812,7 +812,7 @@ class IsoGame:
                             elif mat in ['grass', 'taiga_grass', 'swamp_mud'] and random.random() < 0.08: self.objects['world'].append({'type':'bush','x':x,'y':y}); occupied['world'].add((x,y))
                             elif self.chunk_grid[cy][cx] == 'swamp' and random.random() < 0.05: self.npcs['world'].append({'name': 'Slime', 'x': x, 'y': y, 'hp': 10, 'max_hp': 10, 'type': 'slime'})
                             elif self.chunk_grid[cy][cx] == 'taiga' and random.random() < 0.04: self.npcs['world'].append({'name': 'Goblin', 'x': x, 'y': y, 'hp': 15, 'max_hp': 15, 'type': 'goblin'})
-                            elif random.random() < 0.03: self.npcs['world'].append({'name': 'Bat', 'x': x, 'y': y, 'hp': 8, 'max_hp': 8, 'type': 'bat'})
+                            elif random.random() < 0.03: self.npcs['world'].append({'name': 'Bat', 'x': x, 'y': y, 'hp': 8, 'max_hp': 8, 'type': 'bat', 'nocturnal': True})
                             elif random.random() < 0.03: self.items['world'].append({'type': random.choice(['item_potion', 'item_scroll', 'item_food', 'item_wood', 'item_stone', 'item_fiber', 'item_dagger', 'item_leather_armor']), 'x': x, 'y': y})
         self.maps['world']=world_map; lx,ly=5,5
         while not self.block_definitions[self.maps['world'][ly, lx]]['walkable']: lx,ly=random.randint(3,MAP_SIZE-4),random.randint(3,MAP_SIZE-4)
@@ -1137,8 +1137,10 @@ class IsoGame:
         self.projectiles = [p for p in self.projectiles if p['life'] > 0]
 
         # NPC Logic
+        is_night = self.day_time < 0.25 or self.day_time > 0.75
         if self.player['map'] in self.npcs:
             for npc in self.npcs[self.player['map']]:
+                if npc.get('nocturnal') and not is_night: continue
                 # Status Effects
                 if 'status' in npc:
                     npc['status']['duration'] -= dt
@@ -1422,6 +1424,7 @@ class IsoGame:
             if 0.2 < moon_t < 0.8:
                 moon_x = int((moon_t - 0.2) / 0.6 * sw)
                 moon_y = int(sh * 0.2 + (moon_t - 0.5)**2 * 4 * sh)
+                rl.draw_circle_gradient(moon_x, moon_y, 60, rl.Color(200, 200, 255, 100), rl.Color(200, 200, 255, 0))
                 rl.draw_circle(moon_x, moon_y, 40, rl.Color(220, 220, 255, 255))
                 rl.draw_circle(moon_x - 12, moon_y - 6, 36, bg_color)
 
@@ -1454,10 +1457,11 @@ class IsoGame:
         px, py = self.player['x'], self.player['y']
         entity_render_radius = 12.0
         
+        is_night = self.day_time < 0.25 or self.day_time > 0.75
         render_list=[{'entity_type':'player',**self.player,'depth':self.player.get('x',0)+self.player.get('y',0)+0.6}]
         
         if self.player.get('map')in self.npcs: 
-            render_list.extend([{'entity_type':'npc',**n,'depth':n['x']+n['y']+0.5}for n in self.npcs[self.player['map']] if abs(n['x']-px) < entity_render_radius and abs(n['y']-py) < entity_render_radius])
+            render_list.extend([{'entity_type':'npc',**n,'depth':n['x']+n['y']+0.5}for n in self.npcs[self.player['map']] if abs(n['x']-px) < entity_render_radius and abs(n['y']-py) < entity_render_radius and (not n.get('nocturnal') or is_night)])
         if self.player.get('map')in self.objects: 
             render_list.extend([{'entity_type':'obj',**o,'depth':o['x']+o['y']-(0.5 if o['type']in['ladder','chest']else -0.5)}for o in self.objects[self.player['map']] if abs(o['x']-px) < entity_render_radius and abs(o['y']-py) < entity_render_radius])
         if self.player.get('map')in self.items: 
