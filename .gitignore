@@ -4,8 +4,4 @@
 *.dll
 rom.bin
 snapshot.sav
-build/_deps/sdl2_ttf-src
-build/_deps/sdl2_ttf-src
-build/.ninja_deps
-build/_deps/raylib-build/raylib/raylib.lib
-build/_deps/sdl2_ttf-src
+build/
