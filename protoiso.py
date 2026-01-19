@@ -4,6 +4,7 @@ import numpy as np
 import json
 import os
 import psutil
+import math
 from utils import iso_to_screen, normalize, clamp, get_angle, check_circle_collision, screen_to_iso
 
 # --- CONSTANTS ---
@@ -1153,7 +1154,7 @@ class IsoGame:
                     if npc['status']['duration'] <= 0: del npc['status']
                 
                 if npc.get('type') in ['goblin', 'bat', 'skeleton']:
-                    dist = np.hypot(self.player['x'] - npc['x'], self.player['y'] - npc['y'])
+                    dist = math.hypot(self.player['x'] - npc['x'], self.player['y'] - npc['y'])
                     
                     # Bat Detection System
                     if npc['type'] == 'bat':
@@ -1165,12 +1166,23 @@ class IsoGame:
                             npc['alerted'] = False
                             continue # Bats stay idle if far
 
-                    if 0.5 < dist < 10.0:
+                    if (0.5 < dist < 10.0) or (npc['type'] == 'bat' and dist < 10.0):
                         speed = (3.5 if npc['type'] == 'bat' else 2.0) * dt
                         if npc.get('status', {}).get('type') == 'slow': speed *= 0.5
                         
-                        dx = (self.player['x'] - npc['x']) / dist * speed
-                        dy = (self.player['y'] - npc['y']) / dist * speed
+                        if npc['type'] == 'bat':
+                            angle = rl.get_time() * 2.0 + (id(npc) % 100)
+                            target_x = self.player['x'] + math.cos(angle) * 3.0
+                            target_y = self.player['y'] + math.sin(angle) * 3.0
+                            tdist = math.hypot(target_x - npc['x'], target_y - npc['y'])
+                            if tdist > 0.1:
+                                dx = (target_x - npc['x']) / tdist * speed
+                                dy = (target_y - npc['y']) / tdist * speed
+                            else: dx, dy = 0, 0
+                        else:
+                            dx = (self.player['x'] - npc['x']) / dist * speed
+                            dy = (self.player['y'] - npc['y']) / dist * speed
+                        
                         nx, ny = npc['x'] + dx, npc['y'] + dy
                         
                         can_move = True
@@ -1189,11 +1201,12 @@ class IsoGame:
         # Combat & Interaction
         if rl.is_key_pressed(rl.KEY_SPACE):
             if rl.get_time() - self.player.get('last_attack',0) > 0.5:
-                if self.player['stats'].get('weapon_durability', 0) <= 0:
+                has_weapon = self.player['equipment'].get('weapon') is not None
+                if has_weapon and self.player['stats'].get('weapon_durability', 0) <= 0:
                     self.active_dialogue = {'text': "Weapon broken!", 'time': rl.get_time() + 1.0}
                 else:
                     self.player['last_attack'] = rl.get_time()
-                    self.player['stats']['weapon_durability'] -= 1
+                    if has_weapon: self.player['stats']['weapon_durability'] -= 1
                     px, py = self.player['grid_x'], self.player['grid_y']
                     inv_types = [i['type'] for i in self.player['inventory']]
                     hit_npc = False
@@ -1339,11 +1352,11 @@ class IsoGame:
         """Calculate dynamic tint based on time of day for moving shadows/highlights."""
         t = self.day_time
         # Light direction rotates throughout the day (0 to 2π)
-        light_angle = (t - 0.25) * 2 * np.pi  # 0 at sunrise, π/2 at noon, π at sunset, 3π/2 at midnight
+        light_angle = (t - 0.25) * 2 * math.pi  # 0 at sunrise, π/2 at noon, π at sunset, 3π/2 at midnight
         
         # Calculate light direction (x, y) for 2D lighting
-        light_x = np.cos(light_angle)  # Left/right: negative=left shadow, positive=right shadow
-        light_y = np.sin(light_angle)  # Up/down: negative=top shadow, positive=bottom shadow
+        light_x = math.cos(light_angle)  # Left/right: negative=left shadow, positive=right shadow
+        light_y = math.sin(light_angle)  # Up/down: negative=top shadow, positive=bottom shadow
         
         # Base colors for lighting - more visible night darkening
         nc = (10, 10, 40)   # Night (darker)
@@ -1390,7 +1403,7 @@ class IsoGame:
         else:
             # Day/Night Cycle
             t = self.day_time
-            brightness = (np.sin((t - 0.25) * np.pi * 2) + 1) / 2
+            brightness = (math.sin((t - 0.25) * math.pi * 2) + 1) / 2
             brightness = max(0.1, brightness)
 
             # Get dynamic tint with moving shadows
@@ -1441,15 +1454,16 @@ class IsoGame:
 
             for y in range(min_y, max_y):
                 for x in range(min_x, max_x):
-                    dist = np.hypot(x - px, y - py)
+                    dist = math.hypot(x - px, y - py)
                     if dist > 7.0: continue # Fog cutoff
                     
-                    alpha = 255
                     if dist > 5.5: # Fade out edge
                         alpha = int(255 * (1.0 - (dist - 5.5) / 1.5))
                         alpha = max(0, min(255, alpha))
-                    
-                    tile_tint = rl.Color(tint.r, tint.g, tint.b, alpha)
+                        tile_tint = rl.Color(tint.r, tint.g, tint.b, alpha)
+                    else:
+                        tile_tint = tint
+
                     sx,sy=self.to_screen(x,y); b_id=current_map[y, x]
                     if b_id<len(self.assets['blocks']): rl.draw_texture(self.assets['blocks'][b_id],int(sx-TILE_WIDTH//2),int(sy-TILE_HEIGHT//2),tile_tint)
         
@@ -1469,15 +1483,16 @@ class IsoGame:
             
         render_list.sort(key=lambda item:item['depth'])
         for item in render_list:
-            dist = np.hypot(item.get('x',0) - px, item.get('y',0) - py)
+            dist = math.hypot(item.get('x',0) - px, item.get('y',0) - py)
             if dist > 7.0: continue
             
-            alpha = 255
             if dist > 5.5:
                 alpha = int(255 * (1.0 - (dist - 5.5) / 1.5))
                 alpha = max(0, min(255, alpha))
-            
-            entity_tint = rl.Color(tint.r, tint.g, tint.b, alpha)
+                entity_tint = rl.Color(tint.r, tint.g, tint.b, alpha)
+            else:
+                entity_tint = tint
+
             sx,sy=self.to_screen(item.get('x',0),item.get('y',0)); draw_func=self.draw_dispatch.get(item['entity_type'])
             if draw_func: draw_func(item,sx,sy,entity_tint)
         
@@ -1485,7 +1500,7 @@ class IsoGame:
             rl.draw_rectangle(int(p['x']), int(p['y']), 4, 4, rl.fade(p['color'], p['life']))
         for p in self.projectiles:
             tex = self.assets.get(p.get('type', 'projectile_fireball'), self.assets['projectile_fireball'])
-            rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(p['x'], p['y'], tex.width, tex.height), rl.Vector2(tex.width/2, tex.height/2), np.degrees(p['rotation']), rl.WHITE)
+            rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(p['x'], p['y'], tex.width, tex.height), rl.Vector2(tex.width/2, tex.height/2), math.degrees(p['rotation']), rl.WHITE)
         
         # Draw Lightning Bolts
         for b in self.lightning_bolts:
@@ -1501,7 +1516,18 @@ class IsoGame:
         # Lighting System
         if brightness < 1.0:
             rl.begin_blend_mode(rl.BLEND_ADDITIVE)
-            torch_radius = 200 + np.sin(rl.get_time() * 10) * 5
+            
+            # Campfire lights
+            if self.player.get('map') in self.objects:
+                for obj in self.objects[self.player['map']]:
+                    if obj['type'] == 'campfire':
+                        wx, wy = self.to_screen(obj['x'], obj['y'])
+                        screen_pos = rl.get_world_to_screen_2d(rl.Vector2(wx, wy - 16), self.camera)
+                        if -200 < screen_pos.x < sw + 200 and -200 < screen_pos.y < sh + 200:
+                            fire_radius = 150 + random.uniform(-5, 15)
+                            rl.draw_circle_gradient(int(screen_pos.x), int(screen_pos.y), fire_radius, rl.Color(255, 100, 20, int(180 * (1.0 - brightness))), rl.Color(0, 0, 0, 0))
+
+            torch_radius = 200 + random.uniform(-5, 5)
             rl.draw_circle_gradient(sw // 2, sh // 2 - 25, torch_radius, rl.Color(255, 170, 80, int(200 * (1.0 - brightness))), rl.Color(0, 0, 0, 0))
             rl.end_blend_mode()
             
@@ -1949,7 +1975,7 @@ class IsoGame:
     def _draw_map_tab(self, rect):
         rl.draw_text("World Map",int(rect.x),int(rect.y),20,rl.BLACK)
         if self.world_map_texture:
-            brightness = (np.sin((self.day_time - 0.25) * np.pi * 2) + 1) / 2
+            brightness = (math.sin((self.day_time - 0.25) * math.pi * 2) + 1) / 2
             map_tint = rl.Color(int(255*max(0.4, brightness)), int(255*max(0.4, brightness)), int(255*max(0.4, brightness)), 255)
             map_tex=self.world_map_texture.texture; dest_w,dest_h=rect.width,rect.height-30; scale=min(dest_w/map_tex.width,dest_h/map_tex.height); draw_w,draw_h=map_tex.width*scale,map_tex.height*scale; draw_x,draw_y=rect.x+(dest_w-draw_w)/2,rect.y+30+(dest_h-draw_h)/2
             rl.draw_texture_pro(map_tex,rl.Rectangle(0,0,map_tex.width,-map_tex.height),rl.Rectangle(draw_x,draw_y,draw_w,draw_h),rl.Vector2(0,0),0.0,map_tint)
