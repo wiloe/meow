@@ -80,6 +80,8 @@ class IsoGame:
         self.weather_duration = 60.0
         self.lightning_timer = 0
         self.lightning_active = False
+        self.clouds = [{'x': random.randint(0, SCREEN_WIDTH), 'y': random.randint(0, SCREEN_HEIGHT//2), 'speed': random.uniform(5, 15)} for _ in range(10)]
+        self.lightning_bolts = []
 
         self.recipes = [
             {'name': 'Mega Potion', 'result': 'item_mega_potion', 'ingredients': {'item_potion': 2}},
@@ -104,7 +106,7 @@ class IsoGame:
         self.particles = []
         self.fx_use = rl.load_sound("pop.wav")
         self.fx_step = rl.load_sound("pop.wav"); rl.set_sound_pitch(self.fx_step, 0.6); rl.set_sound_volume(self.fx_step, 0.3)
-        self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.0)
+        self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.5)
         
         self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'campfire':-32, 'bush':-32}
         self.draw_dispatch = {'player':self._draw_player, 'npc':self._draw_npc, 'obj':self._draw_obj, 'item':self._draw_item}
@@ -764,6 +766,14 @@ class IsoGame:
         rl.image_draw_triangle(img_stamina, rl.Vector2(10, 18), rl.Vector2(14, 26), rl.Vector2(22, 18), rl.ORANGE)
         self.assets['icon_stamina'] = rl.load_texture_from_image(img_stamina)
         rl.unload_image(img_stamina)
+        
+        # Cloud
+        img_cloud = rl.gen_image_color(64, 32, rl.BLANK)
+        rl.image_draw_circle(img_cloud, 20, 20, 12, rl.WHITE)
+        rl.image_draw_circle(img_cloud, 35, 16, 14, rl.WHITE)
+        rl.image_draw_circle(img_cloud, 50, 20, 10, rl.WHITE)
+        self.assets['cloud'] = rl.load_texture_from_image(img_cloud)
+        rl.unload_image(img_cloud)
 
     def _create_vignette(self):
         img = rl.gen_image_gradient_radial(800, 800, 0.0, rl.Color(0, 0, 0, 0), rl.Color(0, 0, 0, 255))
@@ -786,7 +796,7 @@ class IsoGame:
 
     def init_game_world(self):
         self.maps,self.objects,self.npcs,self.items,occupied={}, {'world':[],'cave':[]},{'world':[],'cave':[]},{'world':[],'cave':[]},{'world':set(),'cave':set()}
-        self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'stamina':100,'max_stamina':100,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[],'equipment':{'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None},'quests':[],'last_attack':0}
+        self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'stamina':100,'max_stamina':100,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[{'type': 'item_food', 'count': 3}],'equipment':{'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None},'quests':[],'last_attack':0}
         biomes={'temperate':{'base':16,'range':8},'desert':{'base':32,'range':8},'taiga':{'base':48,'range':8},'swamp':{'base':64,'range':16}}; self.chunk_grid=[[random.choice(list(biomes.keys()))for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]; world_map=np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
         for cy in range(WORLD_CHUNKS):
             for cx in range(WORLD_CHUNKS):
@@ -938,6 +948,16 @@ class IsoGame:
     def _update_gameplay(self):
         if rl.is_key_pressed(rl.KEY_F11): rl.toggle_fullscreen()
         
+        # Zoom Control
+        wheel = rl.get_mouse_wheel_move()
+        if wheel != 0:
+            self.camera.zoom = clamp(self.camera.zoom + wheel * 0.1, 0.5, 3.0)
+
+        # Camera follow when not moving (moving updates in _update_player_movement)
+        if not self.player.get('moving'):
+            px_scr, py_scr = self.to_screen(self.player['x'], self.player['y'])
+            self.camera.target = rl.Vector2(px_scr, py_scr)
+
         if rl.is_key_pressed(rl.KEY_Z):
             spell_keys = list(self.spells.keys())
             curr_idx = spell_keys.index(self.current_spell)
@@ -955,18 +975,61 @@ class IsoGame:
         self.weather_timer += dt
         if self.weather_timer > self.weather_duration:
             self.weather_timer = 0; self.weather_duration = random.uniform(60, 120)
-            self.weather = random.choice(['sunny', 'sunny', 'rainy', 'stormy'])
+            self.weather = random.choice(['sunny', 'sunny', 'rainy', 'stormy', 'snowy'])
             self.active_dialogue = {'text': f"Weather: {self.weather.title()}", 'time': rl.get_time() + 3.0}
         
+        # Cloud movement
+        for c in self.clouds:
+            c['x'] += c['speed'] * dt
+            if c['x'] > rl.get_screen_width(): c['x'] = -100; c['y'] = random.randint(0, rl.get_screen_height()//2)
+
         if self.weather in ['rainy', 'stormy']:
             psx, psy = self.to_screen(self.player['x'], self.player['y'])
             for _ in range(4):
                 self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': -20, 'vy': 500, 'life': 1.0, 'color': rl.BLUE, 'type': 'rain'})
+        elif self.weather == 'snowy':
+            psx, psy = self.to_screen(self.player['x'], self.player['y'])
+            for _ in range(2):
+                self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': random.uniform(-10, 10), 'vy': 100, 'life': 2.0, 'color': rl.WHITE, 'type': 'snow'})
         
         if self.weather == 'stormy':
             self.lightning_timer -= dt
-            if self.lightning_timer <= 0: self.lightning_timer = random.uniform(5, 15); self.lightning_active = True; rl.play_sound(self.fx_use)
+            if self.lightning_timer <= 0: 
+                self.lightning_timer = random.uniform(5, 15); self.lightning_active = True; rl.play_sound(self.fx_use)
+                
+                # Lightning strike logic
+                target_x, target_y = 0, 0
+                
+                # 0.05% chance to hit player
+                if random.random() < 0.0005:
+                    target_x, target_y = self.player['x'], self.player['y']
+                    self.player['stats']['hp'] -= 10
+                    self.active_dialogue = {'text': "Struck by Lightning!", 'time': rl.get_time() + 2.0}
+                else:
+                    rx, ry = self.player['x'] + random.randint(-10, 10), self.player['y'] + random.randint(-10, 10)
+                    candidates = []
+                    if self.player['map'] in self.objects:
+                        for obj in self.objects[self.player['map']]:
+                            if abs(obj['x'] - rx) < 5 and abs(obj['y'] - ry) < 5:
+                                h = 2 if obj['type'] in ['tree', 'pine_tree'] else 1
+                                candidates.append((obj, h))
+                    if candidates:
+                        candidates.sort(key=lambda x: x[1], reverse=True)
+                        hit_obj = candidates[0][0]
+                        target_x, target_y = hit_obj['x'], hit_obj['y']
+                        if hit_obj['type'] in ['tree', 'pine_tree']:
+                             self.objects[self.player['map']].remove(hit_obj)
+                             self.items[self.player['map']].append({'type': 'item_wood', 'x': target_x, 'y': target_y})
+                             self._spawn_particles(target_x, target_y, 20, rl.ORANGE)
+                    else: target_x, target_y = rx, ry; self._spawn_particles(target_x, target_y, 10, rl.GRAY)
+                
+                sx, sy = self.to_screen(target_x, target_y)
+                self.lightning_bolts.append({'x': sx, 'y': sy, 'life': 0.2})
+
             if self.lightning_active and random.random() < 0.1: self.lightning_active = False
+        
+        for b in self.lightning_bolts: b['life'] -= dt
+        self.lightning_bolts = [b for b in self.lightning_bolts if b['life'] > 0]
 
         if random.random() < 0.05:
             for obj in self.objects.get(self.player['map'], []):
@@ -983,7 +1046,7 @@ class IsoGame:
 
         if 'stamina' in self.player['stats']:
             is_running = self.player.get('moving', False) and self.player.get('move_duration', 0.2) < 0.2
-            if not is_running:
+            if not is_running and self.player['stats'].get('hunger', 100) > 0:
                 self.player['stats']['stamina'] = clamp(self.player['stats']['stamina'] + dt * 10, 0, self.player['stats']['max_stamina'])
 
         # Fishing Logic
@@ -1265,6 +1328,7 @@ class IsoGame:
         
         is_running = rl.is_key_down(rl.KEY_LEFT_SHIFT) and self.player['stats'].get('stamina', 0) >= 4
         duration = 0.1 if is_running else 0.2
+        if self.weather in ['snowy', 'stormy']: duration *= 1.2
         if is_running: self.player['stats']['stamina'] -= 4
         
         self.player.update({'moving':True,'start_pos':(self.player['x'],self.player['y']),'target_pos':(tx,ty),'move_start_time':rl.get_time(),'move_duration':duration})
@@ -1280,7 +1344,7 @@ class IsoGame:
         light_y = np.sin(light_angle)  # Up/down: negative=top shadow, positive=bottom shadow
         
         # Base colors for lighting - more visible night darkening
-        nc = (20, 20, 60)   # Night (darker)
+        nc = (10, 10, 40)   # Night (darker)
         dc = (255, 255, 255) # Day (brighter)
         
         # Stronger interpolation based on brightness
@@ -1325,7 +1389,7 @@ class IsoGame:
             # Day/Night Cycle
             t = self.day_time
             brightness = (np.sin((t - 0.25) * np.pi * 2) + 1) / 2
-            brightness = max(0.15, brightness)
+            brightness = max(0.1, brightness)
 
             # Get dynamic tint with moving shadows
             tint = self._get_dynamic_block_tint(brightness)
@@ -1343,7 +1407,25 @@ class IsoGame:
             bg_color = rl.Color(bg_r, bg_g, bg_b, 255)
             
         if run_begin_end: rl.begin_drawing()
-        rl.clear_background(bg_color); rl.begin_mode_2d(self.camera)
+        rl.clear_background(bg_color)
+        
+        # Draw Celestial Bodies
+        if self.player.get('map') != 'cave':
+            # Sun
+            if 0.2 < self.day_time < 0.8:
+                sun_x = int((self.day_time - 0.2) / 0.6 * sw)
+                sun_y = int(sh * 0.2 + (self.day_time - 0.5)**2 * 4 * sh)
+                rl.draw_circle_gradient(sun_x, sun_y, 60, rl.Color(255, 255, 200, 255), rl.Color(255, 200, 50, 0))
+            
+            # Moon
+            moon_t = (self.day_time + 0.5) % 1.0
+            if 0.2 < moon_t < 0.8:
+                moon_x = int((moon_t - 0.2) / 0.6 * sw)
+                moon_y = int(sh * 0.2 + (moon_t - 0.5)**2 * 4 * sh)
+                rl.draw_circle(moon_x, moon_y, 40, rl.Color(220, 220, 255, 255))
+                rl.draw_circle(moon_x - 12, moon_y - 6, 36, bg_color)
+
+        rl.begin_mode_2d(self.camera)
         if self.player.get('map')in self.maps:
             current_map=self.maps[self.player['map']]; map_size=len(current_map)
             
@@ -1400,6 +1482,16 @@ class IsoGame:
         for p in self.projectiles:
             tex = self.assets.get(p.get('type', 'projectile_fireball'), self.assets['projectile_fireball'])
             rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(p['x'], p['y'], tex.width, tex.height), rl.Vector2(tex.width/2, tex.height/2), np.degrees(p['rotation']), rl.WHITE)
+        
+        # Draw Lightning Bolts
+        for b in self.lightning_bolts:
+             start = rl.Vector2(b['x'] + random.randint(-50, 50), b['y'] - 400)
+             end = rl.Vector2(b['x'], b['y'])
+             mid1 = rl.Vector2(start.x + (end.x - start.x)*0.3 + random.randint(-30, 30), start.y + (end.y - start.y)*0.3)
+             mid2 = rl.Vector2(start.x + (end.x - start.x)*0.6 + random.randint(-30, 30), start.y + (end.y - start.y)*0.6)
+             rl.draw_line_ex(start, mid1, 3, rl.WHITE); rl.draw_line_ex(mid1, mid2, 3, rl.WHITE); rl.draw_line_ex(mid2, end, 3, rl.WHITE)
+             rl.draw_circle_v(end, 15, rl.fade(rl.WHITE, 0.5))
+
         rl.end_mode_2d()
         
         # Lighting System
@@ -1413,6 +1505,13 @@ class IsoGame:
         elif self.weather == 'stormy': rl.draw_rectangle(0, 0, sw, sh, rl.fade(rl.BLACK, 0.3))
         elif self.weather == 'rainy': rl.draw_rectangle(0, 0, sw, sh, rl.fade(rl.BLUE, 0.1))
         
+        # Draw Clouds
+        cloud_color = rl.Color(255, 255, 255, 150)
+        if self.weather == 'rainy': cloud_color = rl.Color(200, 200, 220, 180)
+        elif self.weather == 'stormy': cloud_color = rl.Color(80, 80, 100, 220)
+        elif self.weather == 'snowy': cloud_color = rl.Color(240, 240, 255, 180)
+        for c in self.clouds: rl.draw_texture(self.assets['cloud'], int(c['x']), int(c['y']), cloud_color)
+        
         rl.draw_texture_pro(self.vignette, rl.Rectangle(0, 0, self.vignette.width, self.vignette.height), rl.Rectangle(0, 0, sw, sh), rl.Vector2(0, 0), 0.0, rl.fade(rl.WHITE, 0.5))
             
         stats=self.player.get('stats',{}); rl.draw_rectangle(5,5,200,150,rl.fade(rl.BLACK,0.5)); rl.draw_text("Player",10,10,20,rl.WHITE)
@@ -1421,7 +1520,11 @@ class IsoGame:
         rl.draw_text(f"STR:{stats.get('str',0)} DEX:{stats.get('dex',0)} INT:{stats.get('int',0)}",10,60,10,rl.LIGHTGRAY)
         rl.draw_texture_ex(self.assets['icon_sword'], rl.Vector2(10, 75), 0, 0.6, rl.WHITE); rl.draw_text(f"{stats.get('weapon_durability',0)}/{stats.get('max_weapon_durability',0)}", 35, 78, 10, rl.ORANGE)
         rl.draw_texture_ex(self.assets['icon_gold'], rl.Vector2(110, 75), 0, 0.6, rl.WHITE); rl.draw_text(f"{stats.get('gold',0)}", 135, 78, 10, rl.GOLD)
-        rl.draw_texture_ex(self.assets['icon_hunger'], rl.Vector2(10, 95), 0, 0.6, rl.WHITE); rl.draw_text(f"{int(stats.get('hunger',0))}/{stats.get('max_hunger',100)}", 35, 98, 10, rl.ORANGE)
+        
+        hunger_val = stats.get('hunger', 0)
+        hunger_col = rl.RED if hunger_val < 20 and int(rl.get_time() * 4) % 2 == 0 else rl.WHITE
+        rl.draw_texture_ex(self.assets['icon_hunger'], rl.Vector2(10, 95), 0, 0.6, hunger_col); rl.draw_text(f"{int(hunger_val)}/{stats.get('max_hunger',100)}", 35, 98, 10, hunger_col if hunger_col == rl.RED else rl.ORANGE)
+        
         is_day = 0.25 < self.day_time < 0.75; time_icon = self.assets['icon_sun'] if is_day else self.assets['icon_moon']
         rl.draw_texture_ex(time_icon, rl.Vector2(110, 95), 0, 0.6, rl.WHITE); rl.draw_text(f"{int(self.day_time*24):02d}:00", 135, 98, 10, rl.YELLOW)
         rl.draw_texture_ex(self.assets['icon_stamina'], rl.Vector2(10, 115), 0, 0.6, rl.WHITE); rl.draw_text(f"{int(stats.get('stamina',0))}/{stats.get('max_stamina',100)}", 35, 118, 10, rl.YELLOW)
