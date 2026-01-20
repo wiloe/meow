@@ -31,6 +31,8 @@ COLOR_WATER_SIDE = rl.Color(3, 169, 244, 255)
 COLOR_STONE_FLOOR = rl.Color(117, 117, 117, 255)
 COLOR_STONE_SIDE = rl.Color(97, 97, 97, 255)
 COLOR_CAVE_WALL = rl.Color(74, 74, 74, 255)
+COLOR_DUNGEON_FLOOR_TOP = rl.Color(60, 60, 70, 255)
+COLOR_DUNGEON_FLOOR_SIDE = rl.Color(40, 40, 50, 255)
 COLOR_TAIGA_GRASS_TOP = rl.Color(85, 139, 47, 255)
 COLOR_TAIGA_GRASS_SIDE = rl.Color(68, 112, 38, 255)
 COLOR_SWAMP_MUD_TOP = rl.Color(85, 74, 65, 255)
@@ -61,6 +63,7 @@ class IsoGame:
         self.day_time = 0.5
         self.day_duration = 60.0
         self.selected_item_index = -1
+        self.drag_data = None
         self.world_map_texture = None
         self.should_close = False
         self.active_dialogue = None
@@ -109,7 +112,7 @@ class IsoGame:
         self.fx_step = rl.load_sound("pop.wav"); rl.set_sound_pitch(self.fx_step, 0.6); rl.set_sound_volume(self.fx_step, 0.3)
         self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.5)
         
-        self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'campfire':-32, 'bush':-32}
+        self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'dungeon_wall':-80, 'campfire':-32, 'bush':-32}
         self.draw_dispatch = {'player':self._draw_player, 'npc':self._draw_npc, 'obj':self._draw_obj, 'item':self._draw_item}
         self.process = psutil.Process(os.getpid())
         self.debug_stats = {'ram': 0, 'cpu': 0, 'timer': 0}
@@ -165,6 +168,10 @@ class IsoGame:
             'swamp_water': {
                 'base': COLOR_SWAMP_WATER_TOP, 'highlight': rl.Color(90, 140, 110, 255), 'shadow': rl.Color(30, 60, 50, 255),
                 'height': 0, 'walkable': False
+            },
+            'dungeon_floor': {
+                'base': COLOR_DUNGEON_FLOOR_TOP, 'highlight': rl.Color(80, 80, 90, 255), 'shadow': COLOR_DUNGEON_FLOOR_SIDE,
+                'height': 5, 'walkable': True
             },
         }
         material_keys = list(base_materials.keys())
@@ -265,7 +272,23 @@ class IsoGame:
         wall_highlight = rl.Color(120, 120, 140, 255)
         wall_shadow = rl.Color(50, 50, 60, 255)
         self.assets['wall'] = self._create_block_texture(wall_base, wall_highlight, wall_shadow, height=int(TILE_HEIGHT*1.5))
-        img_ladder=rl.gen_image_color(64,64,rl.BLANK); rl.image_draw_rectangle(img_ladder,18,8,28,48,rl.BLACK); [rl.image_draw_rectangle(img_ladder,20,12+i*8,24,4,COLOR_TREE_TRUNK) for i in range(6)]; self.assets['ladder']=rl.load_texture_from_image(img_ladder); rl.unload_image(img_ladder)
+        
+        # Dungeon Wall (Darker, bluish stone)
+        dungeon_wall_base = rl.Color(50, 50, 65, 255)
+        dungeon_wall_highlight = rl.Color(70, 70, 90, 255)
+        dungeon_wall_shadow = rl.Color(30, 30, 40, 255)
+        self.assets['dungeon_wall'] = self._create_block_texture(dungeon_wall_base, dungeon_wall_highlight, dungeon_wall_shadow, height=int(TILE_HEIGHT*1.5))
+        
+        # Enhanced ladder sticking out of hole
+        img_ladder = rl.gen_image_color(64, 64, rl.BLANK)
+        rl.image_draw_circle(img_ladder, 32, 48, 16, rl.BLACK) # Hole
+        rl.image_draw_circle(img_ladder, 32, 48, 12, rl.Color(20, 10, 10, 255)) # Inner hole
+        rl.image_draw_rectangle(img_ladder, 20, 25, 4, 45, COLOR_TREE_TRUNK) # Rails
+        rl.image_draw_rectangle(img_ladder, 40, 25, 4, 45, COLOR_TREE_TRUNK)
+        for i in range(6): rl.image_draw_rectangle(img_ladder, 20, 30 + i * 7, 24, 3, rl.Color(100, 70, 40, 255)) # Rungs
+        self.assets['ladder'] = rl.load_texture_from_image(img_ladder)
+        rl.unload_image(img_ladder)
+
         # Enhanced trees with shading
         img_tree = rl.gen_image_color(64, 128, rl.BLANK)
         # Trunk with shadow
@@ -796,7 +819,7 @@ class IsoGame:
         self.player['inventory'].append({'type': item_type, 'count': count})
 
     def init_game_world(self):
-        self.maps,self.objects,self.npcs,self.items,occupied={}, {'world':[],'cave':[]},{'world':[],'cave':[]},{'world':[],'cave':[]},{'world':set(),'cave':set()}
+        self.maps,self.objects,self.npcs,self.items,occupied={}, {'world':[],'cave':[],'dungeon':[]},{'world':[],'cave':[],'dungeon':[]},{'world':[],'cave':[],'dungeon':[]},{'world':set(),'cave':set(),'dungeon':set()}
         self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'stamina':100,'max_stamina':100,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[{'type': 'item_food', 'count': 3}],'equipment':{'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None},'quests':[],'last_attack':0}
         biomes={'temperate':{'base':16,'range':8},'desert':{'base':32,'range':8},'taiga':{'base':48,'range':8},'swamp':{'base':64,'range':16}}; self.chunk_grid=[[random.choice(list(biomes.keys()))for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]; world_map=np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
         for cy in range(WORLD_CHUNKS):
@@ -841,6 +864,15 @@ class IsoGame:
         self.objects['world'].append({'type':'campfire','x':campfire_x,'y':campfire_y}); occupied['world'].add((campfire_x,campfire_y))
         
         ladder_x, ladder_y = find_unoccupied(lx, ly)
+        # Clear obstacles around ladder
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                nx, ny = ladder_x + dx, ladder_y + dy
+                to_remove = [o for o in self.objects['world'] if o['x'] == nx and o['y'] == ny and o['type'] in ['tree', 'pine_tree', 'rock', 'bush', 'wall']]
+                for obj in to_remove:
+                    self.objects['world'].remove(obj)
+                    if (nx, ny) in occupied['world']: occupied['world'].remove((nx, ny))
+
         self.objects['world'].append({'type':'ladder','x':ladder_x,'y':ladder_y,'target_map':'cave','target_pos':(2,2)}); occupied['world'].add((ladder_x,ladder_y))
         cave_map,conceptual_cave_map=np.zeros((CAVE_MAP_SIZE, CAVE_MAP_SIZE), dtype=int),[['cave_wall'for _ in range(CAVE_MAP_SIZE)]for _ in range(CAVE_MAP_SIZE)]; px,py=CAVE_MAP_SIZE//2,CAVE_MAP_SIZE//2
         for _ in range(150): conceptual_cave_map[py][px]='stone_floor'; dx,dy=random.choice([(0,1),(0,-1),(1,0),(-1,0)]); px,py=max(1,min(CAVE_MAP_SIZE-2,px+dx)),max(1,min(CAVE_MAP_SIZE-2,py+dy))
@@ -850,7 +882,22 @@ class IsoGame:
                 elif random.random() < 0.08 and (x!=2 or y!=2): self.npcs['cave'].append({'name': 'Skeleton', 'x': x, 'y': y, 'hp': 12, 'max_hp': 12, 'type': 'skeleton'})
         self.maps['cave']=cave_map
         self.objects['cave'].append({'type':'ladder','x':2,'y':2,'target_map':'world','target_pos':(lx,ly)}); occupied['cave'].add((2,2))
-        self.objects['cave']=[o for o in self.objects['cave']if o.get('type')!='wall'or o['x']!=2 or o['y']!=2]
+        # Clear walls around cave ladder (3x3 area) to ensure exit is accessible
+        self.objects['cave'] = [o for o in self.objects['cave'] if not (o.get('type') == 'wall' and abs(o['x'] - 2) <= 1 and abs(o['y'] - 2) <= 1)]
+        
+        # Dungeon Generation
+        dungeon_x, dungeon_y = find_unoccupied(lx - 5, ly + 5)
+        self.objects['world'].append({'type':'ladder','x':dungeon_x,'y':dungeon_y,'target_map':'dungeon','target_pos':(2,2)}); occupied['world'].add((dungeon_x,dungeon_y))
+        dungeon_floor_id = next((i for i, b in enumerate(self.block_definitions) if b['material'] == 'dungeon_floor'), 0)
+        dungeon_map,conceptual_dungeon=np.full((CAVE_MAP_SIZE, CAVE_MAP_SIZE), dungeon_floor_id, dtype=int),[['wall'for _ in range(CAVE_MAP_SIZE)]for _ in range(CAVE_MAP_SIZE)]; px,py=CAVE_MAP_SIZE//2,CAVE_MAP_SIZE//2
+        for _ in range(200): conceptual_dungeon[py][px]='floor'; dx,dy=random.choice([(0,1),(0,-1),(1,0),(-1,0)]); px,py=max(1,min(CAVE_MAP_SIZE-2,px+dx)),max(1,min(CAVE_MAP_SIZE-2,py+dy))
+        for y in range(CAVE_MAP_SIZE):
+            for x in range(CAVE_MAP_SIZE):
+                if conceptual_dungeon[y][x]=='wall': self.objects['dungeon'].append({'type':'dungeon_wall','x':x,'y':y}); occupied['dungeon'].add((x,y))
+                elif random.random() < 0.1 and (x!=2 or y!=2): self.npcs['dungeon'].append({'name': 'Goblin', 'x': x, 'y': y, 'hp': 15, 'max_hp': 15, 'type': 'goblin'})
+        self.maps['dungeon']=dungeon_map
+        self.objects['dungeon'].append({'type':'ladder','x':2,'y':2,'target_map':'world','target_pos':(dungeon_x,dungeon_y)}); occupied['dungeon'].add((2,2))
+        self.objects['dungeon'] = [o for o in self.objects['dungeon'] if not (o.get('type') == 'dungeon_wall' and abs(o['x'] - 2) <= 1 and abs(o['y'] - 2) <= 1)]
         self._generate_world_map_texture()
 
     def to_screen(self, gx, gy): return iso_to_screen(gx, gy, TILE_WIDTH, TILE_HEIGHT)
@@ -984,50 +1031,53 @@ class IsoGame:
             c['x'] += c['speed'] * dt
             if c['x'] > rl.get_screen_width(): c['x'] = -100; c['y'] = random.randint(0, rl.get_screen_height()//2)
 
-        if self.weather in ['rainy', 'stormy']:
-            psx, psy = self.to_screen(self.player['x'], self.player['y'])
-            for _ in range(4):
-                self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': -20, 'vy': 500, 'life': 1.0, 'color': rl.BLUE, 'type': 'rain'})
-        elif self.weather == 'snowy':
-            psx, psy = self.to_screen(self.player['x'], self.player['y'])
-            for _ in range(2):
-                self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': random.uniform(-10, 10), 'vy': 100, 'life': 2.0, 'color': rl.WHITE, 'type': 'snow'})
-        
-        if self.weather == 'stormy':
-            self.lightning_timer -= dt
-            if self.lightning_timer <= 0: 
-                self.lightning_timer = random.uniform(5, 15); self.lightning_active = True; rl.play_sound(self.fx_use)
-                
-                # Lightning strike logic
-                target_x, target_y = 0, 0
-                
-                # 0.05% chance to hit player
-                if random.random() < 0.0005:
-                    target_x, target_y = self.player['x'], self.player['y']
-                    self.player['stats']['hp'] -= 10
-                    self.active_dialogue = {'text': "Struck by Lightning!", 'time': rl.get_time() + 2.0}
-                else:
-                    rx, ry = self.player['x'] + random.randint(-10, 10), self.player['y'] + random.randint(-10, 10)
-                    candidates = []
-                    if self.player['map'] in self.objects:
-                        for obj in self.objects[self.player['map']]:
-                            if abs(obj['x'] - rx) < 5 and abs(obj['y'] - ry) < 5:
-                                h = 2 if obj['type'] in ['tree', 'pine_tree'] else 1
-                                candidates.append((obj, h))
-                    if candidates:
-                        candidates.sort(key=lambda x: x[1], reverse=True)
-                        hit_obj = candidates[0][0]
-                        target_x, target_y = hit_obj['x'], hit_obj['y']
-                        if hit_obj['type'] in ['tree', 'pine_tree']:
-                             self.objects[self.player['map']].remove(hit_obj)
-                             self.items[self.player['map']].append({'type': 'item_wood', 'x': target_x, 'y': target_y})
-                             self._spawn_particles(target_x, target_y, 20, rl.ORANGE)
-                    else: target_x, target_y = rx, ry; self._spawn_particles(target_x, target_y, 10, rl.GRAY)
-                
-                sx, sy = self.to_screen(target_x, target_y)
-                self.lightning_bolts.append({'x': sx, 'y': sy, 'life': 0.2})
+        is_inside = self.player.get('map') in ['cave', 'dungeon']
 
-            if self.lightning_active and random.random() < 0.1: self.lightning_active = False
+        if not is_inside:
+            if self.weather in ['rainy', 'stormy']:
+                psx, psy = self.to_screen(self.player['x'], self.player['y'])
+                for _ in range(4):
+                    self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': -20, 'vy': 500, 'life': 1.0, 'color': rl.BLUE, 'type': 'rain'})
+            elif self.weather == 'snowy':
+                psx, psy = self.to_screen(self.player['x'], self.player['y'])
+                for _ in range(2):
+                    self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': random.uniform(-10, 10), 'vy': 100, 'life': 2.0, 'color': rl.WHITE, 'type': 'snow'})
+            
+            if self.weather == 'stormy':
+                self.lightning_timer -= dt
+                if self.lightning_timer <= 0: 
+                    self.lightning_timer = random.uniform(5, 15); self.lightning_active = True; rl.play_sound(self.fx_use)
+                    
+                    # Lightning strike logic
+                    target_x, target_y = 0, 0
+                    
+                    # 0.05% chance to hit player
+                    if random.random() < 0.0005:
+                        target_x, target_y = self.player['x'], self.player['y']
+                        self.player['stats']['hp'] -= 10
+                        self.active_dialogue = {'text': "Struck by Lightning!", 'time': rl.get_time() + 2.0}
+                    else:
+                        rx, ry = self.player['x'] + random.randint(-10, 10), self.player['y'] + random.randint(-10, 10)
+                        candidates = []
+                        if self.player['map'] in self.objects:
+                            for obj in self.objects[self.player['map']]:
+                                if abs(obj['x'] - rx) < 5 and abs(obj['y'] - ry) < 5:
+                                    h = 2 if obj['type'] in ['tree', 'pine_tree'] else 1
+                                    candidates.append((obj, h))
+                        if candidates:
+                            candidates.sort(key=lambda x: x[1], reverse=True)
+                            hit_obj = candidates[0][0]
+                            target_x, target_y = hit_obj['x'], hit_obj['y']
+                            if hit_obj['type'] in ['tree', 'pine_tree']:
+                                self.objects[self.player['map']].remove(hit_obj)
+                                self.items[self.player['map']].append({'type': 'item_wood', 'x': target_x, 'y': target_y})
+                                self._spawn_particles(target_x, target_y, 20, rl.ORANGE)
+                        else: target_x, target_y = rx, ry; self._spawn_particles(target_x, target_y, 10, rl.GRAY)
+                    
+                    sx, sy = self.to_screen(target_x, target_y)
+                    self.lightning_bolts.append({'x': sx, 'y': sy, 'life': 0.2})
+
+                if self.lightning_active and random.random() < 0.1: self.lightning_active = False
         
         for b in self.lightning_bolts: b['life'] -= dt
         self.lightning_bolts = [b for b in self.lightning_bolts if b['life'] > 0]
@@ -1396,7 +1446,9 @@ class IsoGame:
         sw, sh = rl.get_screen_width(), rl.get_screen_height()
         self.camera.offset = rl.Vector2(sw // 2, sh // 2)
         
-        if self.player.get('map') == 'cave':
+        is_inside = self.player.get('map') in ['cave', 'dungeon']
+        
+        if is_inside:
             bg_color = COLOR_BG
             tint = rl.Color(100, 100, 120, 255)
             brightness = 0.2
@@ -1425,7 +1477,7 @@ class IsoGame:
         rl.clear_background(bg_color)
         
         # Draw Celestial Bodies
-        if self.player.get('map') != 'cave':
+        if not is_inside:
             # Sun
             if 0.2 < self.day_time < 0.8:
                 sun_x = int((self.day_time - 0.2) / 0.6 * sw)
@@ -1536,11 +1588,12 @@ class IsoGame:
         elif self.weather == 'rainy': rl.draw_rectangle(0, 0, sw, sh, rl.fade(rl.BLUE, 0.1))
         
         # Draw Clouds
-        cloud_color = rl.Color(255, 255, 255, 150)
-        if self.weather == 'rainy': cloud_color = rl.Color(200, 200, 220, 180)
-        elif self.weather == 'stormy': cloud_color = rl.Color(80, 80, 100, 220)
-        elif self.weather == 'snowy': cloud_color = rl.Color(240, 240, 255, 180)
-        for c in self.clouds: rl.draw_texture(self.assets['cloud'], int(c['x']), int(c['y']), cloud_color)
+        if not is_inside:
+            cloud_color = rl.Color(255, 255, 255, 150)
+            if self.weather == 'rainy': cloud_color = rl.Color(200, 200, 220, 180)
+            elif self.weather == 'stormy': cloud_color = rl.Color(80, 80, 100, 220)
+            elif self.weather == 'snowy': cloud_color = rl.Color(240, 240, 255, 180)
+            for c in self.clouds: rl.draw_texture(self.assets['cloud'], int(c['x']), int(c['y']), cloud_color)
         
         rl.draw_texture_pro(self.vignette, rl.Rectangle(0, 0, self.vignette.width, self.vignette.height), rl.Rectangle(0, 0, sw, sh), rl.Vector2(0, 0), 0.0, rl.fade(rl.WHITE, 0.5))
             
@@ -1847,20 +1900,80 @@ class IsoGame:
         inv = self.player.get('inventory', [])
         cols, rows, size, pad = 5, 4, 50, 10
         tooltip = None
+        mp = rl.get_mouse_position()
+
         for i in range(cols * rows):
             c, r = i % cols, i // cols
             x, y = rect.x + c * (size + pad), rect.y + 30 + r * (size + pad)
             slot_rect = rl.Rectangle(x, y, size, size)
-            if rl.gui_button(slot_rect, ""): self.selected_item_index = i if i < len(inv) else -1
+            
+            # Slot interaction
+            if rl.check_collision_point_rec(mp, slot_rect):
+                if rl.is_mouse_button_pressed(rl.MOUSE_LEFT_BUTTON):
+                    self.selected_item_index = i if i < len(inv) else -1
+                    if i < len(inv):
+                        self.drag_data = {'index': i, 'item': inv[i], 'off_x': mp.x - x, 'off_y': mp.y - y}
+                
+                # Split stack (Shift + Right Click)
+                elif rl.is_mouse_button_pressed(rl.MOUSE_RIGHT_BUTTON) and (rl.is_key_down(rl.KEY_LEFT_SHIFT) or rl.is_key_down(rl.KEY_RIGHT_SHIFT)):
+                    if i < len(inv) and inv[i]['count'] > 1:
+                        if len(inv) < cols * rows:
+                            split_amt = inv[i]['count'] // 2
+                            inv[i]['count'] -= split_amt
+                            inv.append({'type': inv[i]['type'], 'count': split_amt})
+                            self.active_dialogue = {'text': "Stack split!", 'time': rl.get_time() + 1.0}
+                        else:
+                            self.active_dialogue = {'text': "Inventory full!", 'time': rl.get_time() + 1.0}
+            
+            # Draw Slot Background
             if i == self.selected_item_index: rl.draw_rectangle_lines(int(x), int(y), int(size), int(size), rl.YELLOW)
+            else: rl.draw_rectangle_lines(int(x), int(y), int(size), int(size), rl.GRAY)
+            
             if i < len(inv):
-                item_data = inv[i]
-                if item_data['type'] in self.assets:
-                    tex = self.assets[item_data['type']]
-                    rl.draw_texture_pro(tex, rl.Rectangle(0,0,tex.width,tex.height), rl.Rectangle(x+5,y+5,size-10,size-10), rl.Vector2(0,0), 0.0, rl.WHITE)
-                    if item_data['count'] > 1: rl.draw_text(str(item_data['count']), int(x+2), int(y+size-12), 10, rl.WHITE)
-                    if rl.check_collision_point_rec(rl.get_mouse_position(), slot_rect):
-                        tooltip = item_data['type'].replace('item_', '').replace('_', ' ').title()
+                # Draw item if not being dragged
+                if not (self.drag_data and self.drag_data['index'] == i):
+                    item_data = inv[i]
+                    if item_data['type'] in self.assets:
+                        tex = self.assets[item_data['type']]
+                        rl.draw_texture_pro(tex, rl.Rectangle(0,0,tex.width,tex.height), rl.Rectangle(x+5,y+5,size-10,size-10), rl.Vector2(0,0), 0.0, rl.WHITE)
+                        if item_data['count'] > 1: rl.draw_text(str(item_data['count']), int(x+2), int(y+size-12), 10, rl.WHITE)
+                    if rl.check_collision_point_rec(mp, slot_rect) and not self.drag_data:
+                        item_type = item_data['type']
+                        name = item_type.replace('item_', '').replace('_', ' ').title()
+                        tooltip = [name]
+                        if item_type in self.item_stats:
+                            stats = self.item_stats[item_type]
+                            if 'damage' in stats: tooltip.append(f"Damage: {stats['damage']}")
+                            if 'defense' in stats: tooltip.append(f"Defense: {stats['defense']}")
+                            if 'durability' in stats: tooltip.append(f"Durability: {stats['durability']}")
+                            if 'weight' in stats: tooltip.append(f"Weight: {stats['weight'].title()}")
+
+        # Handle Dragging
+        if self.drag_data:
+            item_data = self.drag_data['item']
+            if item_data['type'] in self.assets:
+                tex = self.assets[item_data['type']]
+                dx, dy = mp.x - self.drag_data['off_x'], mp.y - self.drag_data['off_y']
+                rl.draw_texture_pro(tex, rl.Rectangle(0,0,tex.width,tex.height), rl.Rectangle(dx+5, dy+5, size-10, size-10), rl.Vector2(0,0), 0.0, rl.fade(rl.WHITE, 0.8))
+                if item_data['count'] > 1: rl.draw_text(str(item_data['count']), int(dx+2), int(dy+size-12), 10, rl.WHITE)
+            
+            if rl.is_mouse_button_released(rl.MOUSE_LEFT_BUTTON):
+                for i in range(cols * rows):
+                    c, r = i % cols, i // cols
+                    x, y = rect.x + c * (size + pad), rect.y + 30 + r * (size + pad)
+                    if rl.check_collision_point_rec(mp, rl.Rectangle(x, y, size, size)):
+                        if i < len(inv) and i != self.drag_data['index']:
+                            src = self.drag_data['index']
+                            if inv[src]['type'] == inv[i]['type']:
+                                inv[i]['count'] += inv[src]['count']
+                                inv.pop(src)
+                                self.selected_item_index = -1
+                            else:
+                                inv[src], inv[i] = inv[i], inv[src]
+                                self.selected_item_index = i
+                        break
+                self.drag_data = None
+
         if self.selected_item_index != -1 and self.selected_item_index < len(inv):
             if rl.gui_button(rl.Rectangle(rect.x, rect.y + 30 + rows * (size + pad) + 10, 100, 30), "Drop"):
                 slot = inv[self.selected_item_index]; slot['count'] -= 1
@@ -1888,9 +2001,16 @@ class IsoGame:
 
         if tooltip:
             mp = rl.get_mouse_position()
-            tw = rl.measure_text(tooltip, 10)
-            rl.draw_rectangle(int(mp.x + 10), int(mp.y + 10), tw + 10, 20, rl.fade(rl.BLACK, 0.8))
-            rl.draw_text(tooltip, int(mp.x + 15), int(mp.y + 15), 10, rl.WHITE)
+            max_w = 0
+            for line in tooltip:
+                w = rl.measure_text(line, 10)
+                if w > max_w: max_w = w
+            
+            h = len(tooltip) * 15 + 10
+            rl.draw_rectangle(int(mp.x + 10), int(mp.y + 10), max_w + 20, h, rl.fade(rl.BLACK, 0.8))
+            for i, line in enumerate(tooltip):
+                color = rl.YELLOW if i == 0 else rl.WHITE
+                rl.draw_text(line, int(mp.x + 15), int(mp.y + 15 + i * 15), 10, color)
 
     def _draw_equipment_tab(self, rect):
         rl.draw_text("Equipment", int(rect.x), int(rect.y), 20, rl.BLACK)
