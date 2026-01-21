@@ -6,4 +6,5 @@ rom.bin
 snapshot.sav
 build/
 eid.py
-__pycache__/utils.cpython-313.pyc
+*.pyc
+__pycache__/asset_loader.cpython-313.pyc
