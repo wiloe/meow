@@ -5,7 +5,9 @@ import json
 import os
 import psutil
 import math
-from utils import iso_to_screen, normalize, clamp, get_angle, check_circle_collision, screen_to_iso
+from utils import iso_to_screen, normalize, clamp, get_angle, check_circle_collision, screen_to_iso, a_star_search
+from dataclasses import dataclass, field
+from typing import Type, Dict, List, Any, Set, Tuple
 
 # --- CONSTANTS ---
 SCREEN_WIDTH = 800
@@ -49,6 +51,279 @@ COLOR_PLAYER_HAIR = rl.Color(93, 64, 55, 255)
 COLOR_PLAYER_PANTS = rl.Color(30, 41, 59, 255)
 COLOR_NPC_BODY = rl.Color(211, 47, 47, 255)
 
+# --- ECS DEFINITIONS ---
+class Component: pass
+
+@dataclass
+class Transform(Component):
+    x: float
+    y: float
+    map_name: str
+
+@dataclass
+class Velocity(Component):
+    vx: float
+    vy: float
+
+@dataclass
+class Lifetime(Component):
+    amount: float
+
+@dataclass
+class Health(Component):
+    current: int
+    max: int
+
+@dataclass
+class ProjectileComp(Component):
+    damage: int
+    effect_type: str = None
+
+@dataclass
+class ParticleComp(Component):
+    color: rl.Color
+    size: float = 4.0
+    gravity: float = 0.0
+    drag: float = 0.0
+
+@dataclass
+class ParticleEmitter(Component):
+    rate: float = 10.0
+    timer: float = 0.0
+    color: rl.Color = rl.WHITE
+    life_range: Tuple[float, float] = (0.5, 1.0)
+    speed_range: float = 60.0
+    size: float = 4.0
+    gravity: float = 0.0
+    drag: float = 0.0
+    active: bool = True
+    burst_count: int = 0
+
+@dataclass
+class Sprite(Component):
+    texture_key: str
+    offset_x: float = 0
+    offset_y: float = 0
+    rotation: float = 0.0
+    scale: float = 1.0
+    tint: rl.Color = rl.WHITE
+    source_rect: rl.Rectangle = None
+
+class ScreenSpace(Component):
+    """Tag component for entities positioned in screen pixels instead of grid coordinates."""
+    pass
+
+@dataclass
+class AIComponent(Component):
+    behavior: str = 'hostile'
+    detect_range: float = 8.0
+    speed: float = 2.0
+    path: list = field(default_factory=list)
+    path_timer: float = 0.0
+
+@dataclass
+class Animation(Component):
+    frames: List[rl.Rectangle] = field(default_factory=list)
+    frame_duration: float = 0.2
+    timer: float = 0.0
+    current_frame: int = 0
+
+class ECSRegistry:
+    def __init__(self):
+        self.next_id = 0
+        self.components = {}
+        self.entities = set()
+        self.dead_entities = set()
+        self.archetypes = {} # Map[frozenset[type], set[eid]]
+        self.entity_archetype = {} # Map[eid, frozenset[type]]
+        self.query_cache = {} # Map[tuple[type], list[frozenset[type]]]
+
+    def create_entity(self):
+        eid = self.next_id
+        self.next_id += 1
+        self.entities.add(eid)
+        
+        # Initialize empty archetype
+        empty_arch = frozenset()
+        self.entity_archetype[eid] = empty_arch
+        if empty_arch not in self.archetypes:
+            self.archetypes[empty_arch] = set()
+            self._update_queries_for_new_archetype(empty_arch)
+        self.archetypes[empty_arch].add(eid)
+        return eid
+
+    def _update_queries_for_new_archetype(self, new_arch):
+        for query_key, matching_archs in self.query_cache.items():
+            if set(query_key).issubset(new_arch):
+                matching_archs.append(new_arch)
+
+    def add_component(self, eid, component):
+        ctype = type(component)
+        if ctype not in self.components: self.components[ctype] = {}
+        self.components[ctype][eid] = component
+        
+        # Update Archetype
+        old_arch = self.entity_archetype.get(eid, frozenset())
+        if old_arch in self.archetypes:
+            self.archetypes[old_arch].discard(eid)
+            
+        new_arch = old_arch | {ctype}
+        self.entity_archetype[eid] = new_arch
+        
+        if new_arch not in self.archetypes:
+            self.archetypes[new_arch] = set()
+            self._update_queries_for_new_archetype(new_arch)
+        self.archetypes[new_arch].add(eid)
+
+    def get_component(self, eid, ctype):
+        return self.components.get(ctype, {}).get(eid)
+
+    def destroy_entity(self, eid):
+        self.dead_entities.add(eid)
+
+    def process_removals(self):
+        for eid in self.dead_entities:
+            if eid in self.entities:
+                self.entities.remove(eid)
+                
+                # Remove from Archetype
+                if eid in self.entity_archetype:
+                    arch = self.entity_archetype[eid]
+                    if arch in self.archetypes:
+                        self.archetypes[arch].discard(eid)
+                    del self.entity_archetype[eid]
+
+                for store in self.components.values():
+                    if eid in store: del store[eid]
+        self.dead_entities.clear()
+
+    def view(self, *ctypes):
+        if not ctypes: return
+        
+        # Use sorted tuple of types as cache key
+        key = tuple(sorted(ctypes, key=id))
+        
+        if key not in self.query_cache:
+            # Build cache for this query
+            matching_archs = []
+            query_set = set(ctypes)
+            for arch in self.archetypes:
+                if query_set.issubset(arch):
+                    matching_archs.append(arch)
+            self.query_cache[key] = matching_archs
+        
+        # Iterate over cached archetypes
+        for arch in self.query_cache[key]:
+            for eid in self.archetypes[arch]:
+                yield eid, [self.components[t][eid] for t in ctypes]
+
+class System:
+    def update(self, dt, registry, game): pass
+
+class PhysicsSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (pos, vel) in registry.view(Transform, Velocity):
+            pos.x += vel.vx * dt
+            pos.y += vel.vy * dt
+
+class ParticleUpdateSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (vel, part) in registry.view(Velocity, ParticleComp):
+            # Apply gravity
+            vel.vy += part.gravity * dt
+            # Apply drag (simple damping)
+            if part.drag > 0:
+                vel.vx *= (1.0 - part.drag * dt)
+                vel.vy *= (1.0 - part.drag * dt)
+
+class ParticleEmitterSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (pos, emit) in registry.view(Transform, ParticleEmitter):
+            if not emit.active: continue
+            
+            # Burst Logic
+            if emit.burst_count > 0:
+                for _ in range(emit.burst_count):
+                    self._spawn_particle(registry, pos, emit)
+                registry.destroy_entity(eid)
+                continue
+            
+            # Continuous Logic
+            emit.timer += dt
+            if emit.rate > 0:
+                interval = 1.0 / emit.rate
+                while emit.timer >= interval:
+                    emit.timer -= interval
+                    self._spawn_particle(registry, pos, emit)
+
+    def _spawn_particle(self, registry, pos, emit):
+        p_eid = registry.create_entity()
+        registry.add_component(p_eid, Transform(pos.x, pos.y, pos.map_name))
+        vx = random.uniform(-emit.speed_range, emit.speed_range)
+        vy = random.uniform(-emit.speed_range, emit.speed_range)
+        registry.add_component(p_eid, Velocity(vx, vy))
+        registry.add_component(p_eid, ParticleComp(emit.color, emit.size, emit.gravity, emit.drag))
+        registry.add_component(p_eid, Lifetime(random.uniform(*emit.life_range)))
+
+class LifetimeSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (life,) in registry.view(Lifetime):
+            life.amount -= dt
+            if life.amount <= 0:
+                registry.destroy_entity(eid)
+
+class MobSystem(System):
+    def update(self, dt, registry, game):
+        player_pos = (game.player['x'], game.player['y'])
+        
+        for eid, (pos, vel, ai) in registry.view(Transform, Velocity, AIComponent):
+            if pos.map_name != game.player['map']: continue
+            
+            dist = math.hypot(player_pos[0] - pos.x, player_pos[1] - pos.y)
+            vel.vx, vel.vy = 0, 0 # Reset velocity
+            
+            if ai.behavior == 'hostile':
+                if dist < ai.detect_range:
+                    ai.path_timer -= dt
+                    if ai.path_timer <= 0:
+                        ai.path_timer = random.uniform(0.5, 1.0)
+                        start = (int(pos.x + 0.5), int(pos.y + 0.5))
+                        goal = (int(player_pos[0] + 0.5), int(player_pos[1] + 0.5))
+                        ai.path = a_star_search(start, goal, lambda p: game._get_neighbors(p, pos.map_name))
+                        if ai.path: ai.path.pop(0)
+                    
+                    if ai.path:
+                        next_node = ai.path[0]
+                        dx, dy = next_node[0] - pos.x, next_node[1] - pos.y
+                        d = math.hypot(dx, dy)
+                        if d < 0.1:
+                            ai.path.pop(0)
+                        else:
+                            vel.vx = (dx / d) * ai.speed
+                            vel.vy = (dy / d) * ai.speed
+
+class AnimationSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (anim, sprite, vel) in registry.view(Animation, Sprite, Velocity):
+            is_moving = abs(vel.vx) > 0.1 or abs(vel.vy) > 0.1
+            if is_moving:
+                anim.timer += dt
+                if anim.timer >= anim.frame_duration:
+                    anim.timer = 0
+                    anim.current_frame = (anim.current_frame + 1) % len(anim.frames)
+            else:
+                anim.current_frame = 0
+                anim.timer = 0
+            
+            if anim.frames:
+                sprite.source_rect = anim.frames[anim.current_frame]
+
+class RenderSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (pos, part, life) in registry.view(Transform, ParticleComp, Lifetime):
+            if pos.map_name != game.player['map']: continue
+            rl.draw_circle(int(pos.x), int(pos.y), part.size / 2, rl.fade(part.color, min(1.0, life.amount)))
+
 class IsoGame:
     def __init__(self):
         rl.set_config_flags(rl.FLAG_WINDOW_RESIZABLE)
@@ -61,7 +336,8 @@ class IsoGame:
         self.splash_timer = 3.0  # Show splash for 3 seconds
         self.pause_menu_active_tab = 0
         self.day_time = 0.5
-        self.day_duration = 60.0
+        self.day_duration = 1440.0 # 24 minutes
+        self.calendar = {'day': 1, 'week': 1, 'month': 1, 'year': 1, 'season': 'Spring'}
         self.selected_item_index = -1
         self.drag_data = None
         self.world_map_texture = None
@@ -69,7 +345,6 @@ class IsoGame:
         self.active_dialogue = None
         self.gameplay_cache_texture = None
         self.gameplay_cache_valid = False
-        self.projectiles = []
         self.fishing = {'active': False, 'state': 'idle', 'timer': 0}
         self.spells = {
             'fireball': {'cost': 5, 'damage': 10, 'speed': 400, 'tex': 'projectile_fireball'},
@@ -93,7 +368,8 @@ class IsoGame:
             {'name': 'Bomb', 'result': 'item_bomb', 'ingredients': {'item_fiber': 2, 'item_stone': 1}},
             {'name': 'Stone Axe', 'result': 'item_axe', 'ingredients': {'item_wood': 2, 'item_stone': 2}},
             {'name': 'Stone Pick', 'result': 'item_pickaxe', 'ingredients': {'item_wood': 2, 'item_stone': 2}},
-            {'name': 'Iron Sword', 'result': 'item_sword', 'ingredients': {'item_wood': 1, 'item_stone': 3}}
+            {'name': 'Iron Sword', 'result': 'item_sword', 'ingredients': {'item_wood': 1, 'item_stone': 3}},
+            {'name': 'Bread', 'result': 'item_bread', 'ingredients': {'item_wheat': 3}}
         ]
         self.assets = {}
         self.block_definitions = []
@@ -104,16 +380,16 @@ class IsoGame:
         self.maps = {}
         self.chunk_grid = []
         self.objects = {}
+        self.collision_cache = {} # New spatial cache
         self.npcs = {}
         self.player = {}
         self.active_dialogue = None
-        self.particles = []
         self.fx_use = rl.load_sound("pop.wav")
         self.fx_step = rl.load_sound("pop.wav"); rl.set_sound_pitch(self.fx_step, 0.6); rl.set_sound_volume(self.fx_step, 0.3)
         self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.5)
         
         self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'dungeon_wall':-80, 'campfire':-32, 'bush':-32}
-        self.draw_dispatch = {'player':self._draw_player, 'npc':self._draw_npc, 'obj':self._draw_obj, 'item':self._draw_item}
+        self.draw_dispatch = {'player':self._draw_player, 'npc':self._draw_npc, 'obj':self._draw_obj, 'item':self._draw_item, 'ecs_sprite':self._draw_ecs_sprite}
         self.process = psutil.Process(os.getpid())
         self.debug_stats = {'ram': 0, 'cpu': 0, 'timer': 0}
         self.vignette = self._create_vignette()
@@ -133,6 +409,11 @@ class IsoGame:
             'item_plate_armor': {'type': 'armor', 'slot': 'chest', 'defense': 8, 'weight': 'heavy', 'durability': 200},
             'item_iron_helm': {'type': 'armor', 'slot': 'head', 'defense': 3, 'weight': 'medium', 'durability': 100},
         }
+        
+        # Initialize ECS
+        self.ecs = ECSRegistry()
+        self.systems = [ParticleEmitterSystem(), ParticleUpdateSystem(), PhysicsSystem(), ProjectileSystem(), LifetimeSystem(), MobSystem(), AnimationSystem()]
+        self.render_systems = [RenderSystem()]
 
     def _generate_block_definitions(self):
         """Generate block definitions with 3-color palette (base, highlight, shadow)."""
@@ -616,6 +897,42 @@ class IsoGame:
         self.assets['item_food'] = rl.load_texture_from_image(img_food)
         rl.unload_image(img_food)
         
+        # Crop textures (Wheat)
+        for stage in range(4):
+            img = rl.gen_image_color(32, 32, rl.BLANK)
+            # Draw soil patch
+            rl.image_draw_circle(img, 16, 24, 10, rl.Color(60, 40, 20, 200))
+            if stage == 0: # Seeds
+                rl.image_draw_circle(img, 14, 24, 2, rl.BEIGE); rl.image_draw_circle(img, 18, 24, 2, rl.BEIGE)
+            elif stage == 1: # Sprout
+                rl.image_draw_rectangle(img, 15, 18, 2, 6, rl.LIME); rl.image_draw_circle(img, 16, 18, 3, rl.GREEN)
+            elif stage == 2: # Growing
+                rl.image_draw_rectangle(img, 15, 12, 2, 12, rl.LIME); rl.image_draw_circle(img, 16, 12, 5, rl.GREEN)
+                rl.image_draw_line(img, 16, 18, 10, 14, rl.LIME); rl.image_draw_line(img, 16, 18, 22, 14, rl.LIME)
+            elif stage == 3: # Mature
+                rl.image_draw_rectangle(img, 15, 8, 2, 16, rl.GOLD); rl.image_draw_circle(img, 16, 8, 6, rl.YELLOW)
+                rl.image_draw_line(img, 16, 16, 8, 10, rl.GOLD); rl.image_draw_line(img, 16, 16, 24, 10, rl.GOLD)
+            self.assets[f'crop_wheat_{stage}'] = rl.load_texture_from_image(img)
+            rl.unload_image(img)
+            
+        # Item Seeds & Produce
+        img_seeds = rl.gen_image_color(32, 32, rl.BLANK)
+        rl.image_draw_circle(img_seeds, 16, 16, 8, rl.BROWN); rl.image_draw_circle(img_seeds, 16, 12, 3, rl.BEIGE)
+        self.assets['item_seeds_wheat'] = rl.load_texture_from_image(img_seeds); rl.unload_image(img_seeds)
+        
+        img_wheat = rl.gen_image_color(32, 32, rl.BLANK)
+        rl.image_draw_line(img_wheat, 16, 28, 16, 4, rl.GOLD); rl.image_draw_circle(img_wheat, 16, 8, 4, rl.YELLOW)
+        rl.image_draw_line(img_wheat, 16, 14, 10, 8, rl.GOLD); rl.image_draw_line(img_wheat, 16, 14, 22, 8, rl.GOLD)
+        self.assets['item_wheat'] = rl.load_texture_from_image(img_wheat); rl.unload_image(img_wheat)
+
+        # Bread
+        img_bread = rl.gen_image_color(32, 32, rl.BLANK)
+        rl.image_draw_rectangle(img_bread, 6, 14, 20, 10, rl.ORANGE) # Body
+        rl.image_draw_circle(img_bread, 11, 14, 6, rl.ORANGE) # Top left
+        rl.image_draw_circle(img_bread, 21, 14, 6, rl.ORANGE) # Top right
+        rl.image_draw_circle(img_bread, 16, 14, 6, rl.ORANGE) # Top mid
+        self.assets['item_bread'] = rl.load_texture_from_image(img_bread); rl.unload_image(img_bread)
+
         img_fish = rl.gen_image_color(32, 32, rl.BLANK)
         rl.image_draw_circle(img_fish, 17, 17, 13, rl.Color(0, 0, 150, 255))  # Shadow
         rl.image_draw_circle(img_fish, 16, 16, 12, rl.BLUE)  # Body
@@ -814,13 +1131,20 @@ class IsoGame:
         rl.end_texture_mode()
 
     def add_inventory_item(self, item_type, count=1):
+        # Try to stack
         for slot in self.player['inventory']:
-            if slot['type'] == item_type: slot['count'] += count; return
-        self.player['inventory'].append({'type': item_type, 'count': count})
+            if slot and slot['type'] == item_type: slot['count'] += count; return True
+        # Find empty slot
+        for i, slot in enumerate(self.player['inventory']):
+            if slot is None:
+                self.player['inventory'][i] = {'type': item_type, 'count': count}; return True
+        return False # Inventory full
 
     def init_game_world(self):
         self.maps,self.objects,self.npcs,self.items,occupied={}, {'world':[],'cave':[],'dungeon':[]},{'world':[],'cave':[],'dungeon':[]},{'world':[],'cave':[],'dungeon':[]},{'world':set(),'cave':set(),'dungeon':set()}
-        self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'stamina':100,'max_stamina':100,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[{'type': 'item_food', 'count': 3}],'equipment':{'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None},'quests':[],'last_attack':0}
+        self.player={'x':4.0,'y':4.0,'grid_x':4,'grid_y':4,'map':'world','moving':False,'move_start_time':0,'start_pos':(4,4),'target_pos':(4,4),'stats':{'str':5,'dex':5,'int':5,'hp':20,'max_hp':20,'mana':20,'max_mana':20,'stamina':100,'max_stamina':100,'level':1,'xp':0,'next_level_xp':100,'weapon_durability':50,'max_weapon_durability':50,'gold':0,'hunger':100,'max_hunger':100},'inventory':[None]*20,'equipment':{'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None},'quests':[],'last_attack':0}
+        self.player['inventory'][0] = {'type': 'item_food', 'count': 3}
+        self.player['inventory'][1] = {'type': 'item_seeds_wheat', 'count': 5}
         biomes={'temperate':{'base':16,'range':8},'desert':{'base':32,'range':8},'taiga':{'base':48,'range':8},'swamp':{'base':64,'range':16}}; self.chunk_grid=[[random.choice(list(biomes.keys()))for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]; world_map=np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
         for cy in range(WORLD_CHUNKS):
             for cx in range(WORLD_CHUNKS):
@@ -899,6 +1223,28 @@ class IsoGame:
         self.objects['dungeon'].append({'type':'ladder','x':2,'y':2,'target_map':'world','target_pos':(dungeon_x,dungeon_y)}); occupied['dungeon'].add((2,2))
         self.objects['dungeon'] = [o for o in self.objects['dungeon'] if not (o.get('type') == 'dungeon_wall' and abs(o['x'] - 2) <= 1 and abs(o['y'] - 2) <= 1)]
         self._generate_world_map_texture()
+        self._rebuild_collision_cache()
+        
+        # Create Player Trail Emitter
+        self.player_emitter_id = self.ecs.create_entity()
+        self.ecs.add_component(self.player_emitter_id, Transform(self.player['x'], self.player['y'], self.player['map']))
+        self.ecs.add_component(self.player_emitter_id, ParticleEmitter(
+            rate=20.0, 
+            color=rl.Color(200, 200, 200, 100), 
+            size=3.0, 
+            life_range=(0.3, 0.6), 
+            gravity=-10.0, 
+            active=False
+        ))
+
+    def _rebuild_collision_cache(self):
+        """Build a set of occupied coordinates for O(1) lookup."""
+        self.collision_cache = {}
+        for map_name, objs in self.objects.items():
+            self.collision_cache[map_name] = set()
+            for obj in objs:
+                if obj['type'] not in ['ladder', 'chest', 'bush']: # Walkable objects
+                    self.collision_cache[map_name].add((int(obj['x']), int(obj['y'])))
 
     def to_screen(self, gx, gy): return iso_to_screen(gx, gy, TILE_WIDTH, TILE_HEIGHT)
     def change_map(self, t_map, t_pos): self.player['map']=t_map; self.player['x'],self.player['y']=float(t_pos[0]),float(t_pos[1]); self.player['grid_x'],self.player['grid_y']=t_pos[0],t_pos[1]; self.player['moving']=False
@@ -923,21 +1269,24 @@ class IsoGame:
             item = self.player['equipment'].get(slot)
             if item and item in self.item_stats: defense += self.item_stats[item].get('defense', 0)
         return defense
+    
+    def _create_particles(self, x, y, count, color, speed_range=60, life_range=(0.5, 1.0), size=4, vel_y_bias=0, gravity=200.0, drag=1.0):
+        for _ in range(count):
+            eid = self.ecs.create_entity()
+            self.ecs.add_component(eid, Transform(x, y, self.player['map']))
+            self.ecs.add_component(eid, Velocity(random.uniform(-speed_range, speed_range), random.uniform(-speed_range, speed_range) + vel_y_bias))
+            self.ecs.add_component(eid, ParticleComp(color, size, gravity, drag))
+            self.ecs.add_component(eid, Lifetime(random.uniform(*life_range)))
 
     def _spawn_particles(self, gx, gy, count, color, offset_y=-30):
         sx, sy = self.to_screen(gx, gy)
-        for _ in range(count):
-            self.particles.append({
-                'x': sx, 'y': sy + offset_y,
-                'vx': random.uniform(-60, 60), 'vy': random.uniform(-60, 60),
-                'life': random.uniform(0.5, 1.0),
-                'color': color
-            })
+        self._create_particles(sx, sy + offset_y, count, color)
 
     def use_item(self, index):
         inv = self.player.get('inventory', [])
         if 0 <= index < len(inv):
-            item = inv[index]; used = False
+            item = inv[index]; used = False; 
+            if item is None: return
             match item['type']:
                 case 'item_potion':
                     if self.player['stats']['hp'] < self.player['stats']['max_hp']:
@@ -961,6 +1310,14 @@ class IsoGame:
                     if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
                         self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 20, 0, self.player['stats'].get('max_hunger', 100))
                         self.active_dialogue = {'text': "Ate Food (+20 Hunger)", 'time': rl.get_time() + 2.0}; used = True
+                case 'item_wheat':
+                    if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
+                        self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 5, 0, self.player['stats'].get('max_hunger', 100))
+                        self.active_dialogue = {'text': "Ate Wheat (+5 Hunger)", 'time': rl.get_time() + 2.0}; used = True
+                case 'item_bread':
+                    if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
+                        self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 30, 0, self.player['stats'].get('max_hunger', 100))
+                        self.active_dialogue = {'text': "Ate Bread (+30 Hunger)", 'time': rl.get_time() + 2.0}; used = True
                 case 'item_fish':
                     if self.player['stats'].get('hunger', 0) < self.player['stats'].get('max_hunger', 100):
                         self.player['stats']['hunger'] = clamp(self.player['stats'].get('hunger', 0) + 15, 0, self.player['stats'].get('max_hunger', 100))
@@ -991,7 +1348,7 @@ class IsoGame:
             if used:
                 rl.play_sound(self.fx_use)
                 item['count'] -= 1; 
-                if item['count'] <= 0: inv.pop(index)
+                if item['count'] <= 0: inv[index] = None
 
     def _update_gameplay(self):
         if rl.is_key_pressed(rl.KEY_F11): rl.toggle_fullscreen()
@@ -1016,10 +1373,11 @@ class IsoGame:
             if rl.is_key_pressed(key): self.use_item(i)
         
         dt = rl.get_frame_time()
-        for p in self.particles:
-            p['x'] += p['vx'] * dt; p['y'] += p['vy'] * dt; p['life'] -= dt
-        self.particles = [p for p in self.particles if p['life'] > 0]
         
+        prev_day_time = self.day_time
+        self.day_time = (self.day_time + dt / self.day_duration) % 1.0
+        if self.day_time < prev_day_time: self._advance_day()
+
         self.weather_timer += dt
         if self.weather_timer > self.weather_duration:
             self.weather_timer = 0; self.weather_duration = random.uniform(60, 120)
@@ -1037,11 +1395,11 @@ class IsoGame:
             if self.weather in ['rainy', 'stormy']:
                 psx, psy = self.to_screen(self.player['x'], self.player['y'])
                 for _ in range(4):
-                    self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': -20, 'vy': 500, 'life': 1.0, 'color': rl.BLUE, 'type': 'rain'})
+                    self._create_particles(psx + random.uniform(-500, 500), psy + random.uniform(-400, 400) - 300, 1, rl.BLUE, speed_range=0, life_range=(1.0, 1.0), vel_y_bias=500)
             elif self.weather == 'snowy':
                 psx, psy = self.to_screen(self.player['x'], self.player['y'])
                 for _ in range(2):
-                    self.particles.append({'x': psx + random.uniform(-500, 500), 'y': psy + random.uniform(-400, 400) - 300, 'vx': random.uniform(-10, 10), 'vy': 100, 'life': 2.0, 'color': rl.WHITE, 'type': 'snow'})
+                    self._create_particles(psx + random.uniform(-500, 500), psy + random.uniform(-400, 400) - 300, 1, rl.WHITE, speed_range=10, life_range=(2.0, 2.0), vel_y_bias=100)
             
             if self.weather == 'stormy':
                 self.lightning_timer -= dt
@@ -1096,9 +1454,14 @@ class IsoGame:
             self.player['stats']['mana'] = clamp(self.player['stats']['mana'] + dt * 0.5, 0, self.player['stats']['max_mana'])
 
         if 'stamina' in self.player['stats']:
+            # Weather affects stamina regeneration
+            regen_mult = 1.0
+            if self.weather == 'rainy': regen_mult = 0.8
+            elif self.weather == 'stormy': regen_mult = 0.6
+            elif self.weather == 'sunny': regen_mult = 1.2
             is_running = self.player.get('moving', False) and self.player.get('move_duration', 0.2) < 0.2
             if not is_running and self.player['stats'].get('hunger', 100) > 0:
-                self.player['stats']['stamina'] = clamp(self.player['stats']['stamina'] + dt * 10, 0, self.player['stats']['max_stamina'])
+                self.player['stats']['stamina'] = clamp(self.player['stats']['stamina'] + dt * 10 * regen_mult, 0, self.player['stats']['max_stamina'])
 
         # Fishing Logic
         if self.fishing['active']:
@@ -1149,43 +1512,20 @@ class IsoGame:
                 vx, vy = normalize(dx, dy)
                 rot = get_angle(sp[0], sp[1]-30, mp.x, mp.y)
                 if vx != 0 or vy != 0:
-                    self.projectiles.append({'x': sp[0], 'y': sp[1]-30, 'vx': vx*spell['speed'], 'vy': vy*spell['speed'], 'life': 2.0, 'damage': spell['damage'], 'rotation': rot, 'type': spell['tex']})
+                    eid = self.ecs.create_entity()
+                    self.ecs.add_component(eid, Transform(sp[0], sp[1]-30, self.player['map']))
+                    self.ecs.add_component(eid, Velocity(vx*spell['speed'], vy*spell['speed']))
+                    effect = 'slow' if 'ice' in self.current_spell else ('poison' if 'acid' in self.current_spell else None)
+                    self.ecs.add_component(eid, ProjectileComp(spell['damage'], effect))
+                    self.ecs.add_component(eid, Sprite(spell['tex'], rotation=math.degrees(rot)))
+                    self.ecs.add_component(eid, ScreenSpace())
+                    self.ecs.add_component(eid, Lifetime(2.0))
             else: self.active_dialogue = {'text': "Not enough Mana!", 'time': rl.get_time() + 1.0}
 
         # Update Projectiles
-        for p in self.projectiles:
-            p['x'] += p['vx'] * dt; p['y'] += p['vy'] * dt; p['life'] -= dt
-            
-            gx, gy = screen_to_iso(p['x'], p['y'], TILE_WIDTH, TILE_HEIGHT)
-            igx, igy = int(gx + 0.5), int(gy + 0.5)
-            hit_wall = False
-            if self.player['map'] in self.maps:
-                current_map = self.maps[self.player['map']]
-                if not (0 <= igx < len(current_map) and 0 <= igy < len(current_map)): hit_wall = True
-                elif not self.block_definitions[current_map[igy, igx]]['walkable']: hit_wall = True
-                else:
-                    for obj in self.objects[self.player['map']]:
-                        if obj.get('type') in ['tree', 'pine_tree', 'rock', 'wall'] and int(obj['x']) == igx and int(obj['y']) == igy: hit_wall = True; break
-            
-            if hit_wall:
-                p['life'] = 0
-                for _ in range(10): self.particles.append({'x': p['x'], 'y': p['y'], 'vx': random.uniform(-60, 60), 'vy': random.uniform(-60, 60), 'life': random.uniform(0.3, 0.6), 'color': rl.GRAY})
-                continue
-
-            for npc in self.npcs[self.player['map']]:
-                nsx, nsy = self.to_screen(npc['x'], npc['y'])
-                if check_circle_collision(p['x'], p['y'], 10, nsx, nsy - 30, 20):
-                    npc['hp'] -= p['damage']; p['life'] = 0
-                    if p['type'] == 'projectile_ice_lance': npc['status'] = {'type': 'slow', 'duration': 3.0}
-                    elif p['type'] == 'projectile_acid_arrow': npc['status'] = {'type': 'poison', 'duration': 5.0, 'tick': 0}
-                    
-                    color = rl.ORANGE
-                    if p['type'] == 'projectile_ice_lance': color = rl.SKYBLUE
-                    elif p['type'] == 'projectile_acid_arrow': color = rl.LIME
-                    self._spawn_particles(npc['x'], npc['y'], 10, color)
-                    if npc['hp'] <= 0: self.npcs[self.player['map']].remove(npc); self.gain_xp(50)
-                    break
-        self.projectiles = [p for p in self.projectiles if p['life'] > 0]
+        self.ecs.process_removals()
+        for system in self.systems:
+            system.update(dt, self.ecs, self)
 
         # NPC Logic
         is_night = self.day_time < 0.25 or self.day_time > 0.75
@@ -1217,34 +1557,66 @@ class IsoGame:
                             continue # Bats stay idle if far
 
                     if (0.5 < dist < 10.0) or (npc['type'] == 'bat' and dist < 10.0):
-                        speed = (3.5 if npc['type'] == 'bat' else 2.0) * dt
-                        if npc.get('status', {}).get('type') == 'slow': speed *= 0.5
+                        base_speed = (3.5 if npc['type'] == 'bat' else 2.0)
+                        if npc.get('status', {}).get('type') == 'slow': base_speed *= 0.5
+                        move_amount = base_speed * dt
                         
                         if npc['type'] == 'bat':
+                            # Bats keep simple direct movement (flying)
                             angle = rl.get_time() * 2.0 + (id(npc) % 100)
                             target_x = self.player['x'] + math.cos(angle) * 3.0
                             target_y = self.player['y'] + math.sin(angle) * 3.0
                             tdist = math.hypot(target_x - npc['x'], target_y - npc['y'])
                             if tdist > 0.1:
-                                dx = (target_x - npc['x']) / tdist * speed
-                                dy = (target_y - npc['y']) / tdist * speed
+                                dx = (target_x - npc['x']) / tdist * move_amount
+                                dy = (target_y - npc['y']) / tdist * move_amount
                             else: dx, dy = 0, 0
+                            npc['x'] += dx; npc['y'] += dy
                         else:
-                            dx = (self.player['x'] - npc['x']) / dist * speed
-                            dy = (self.player['y'] - npc['y']) / dist * speed
-                        
-                        nx, ny = npc['x'] + dx, npc['y'] + dy
-                        
-                        can_move = True
-                        if npc['type'] != 'bat': # Bats fly over obstacles
-                            if 0 <= int(nx) < len(self.maps[self.player['map']]) and 0 <= int(ny) < len(self.maps[self.player['map']]):
-                                b_id = self.maps[self.player['map']][int(ny), int(nx)]
-                                if not self.block_definitions[b_id]['walkable']: can_move = False
-                            else: can_move = False
-                        
-                        if can_move: npc['x'], npc['y'] = nx, ny
+                            # Ground NPCs use A* Pathfinding
+                            start_pos = (int(npc['x'] + 0.5), int(npc['y'] + 0.5))
+                            target_pos = (int(self.player['x'] + 0.5), int(self.player['y'] + 0.5))
+                            
+                            # Update path periodically or if no path
+                            npc['path_timer'] = npc.get('path_timer', 0) - dt
+                            if npc['path_timer'] <= 0:
+                                npc['path_timer'] = random.uniform(0.5, 1.0) # Stagger updates
+                                npc['path'] = a_star_search(start_pos, target_pos, lambda p: self._get_neighbors(p, self.player['map']))
+                                if len(npc['path']) > 0: npc['path'].pop(0) # Remove current tile
+                            
+                            # Follow path
+                            path = npc.get('path', [])
+                            if path:
+                                next_node = path[0]
+                                ndx, ndy = next_node[0] - npc['x'], next_node[1] - npc['y']
+                                ndist = math.hypot(ndx, ndy)
+                                
+                                if ndist < 0.1:
+                                    npc['path'].pop(0)
+                                else:
+                                    npc['x'] += (ndx / ndist) * move_amount
+                                    npc['y'] += (ndy / ndist) * move_amount
 
-        self.day_time = (self.day_time + dt / self.day_duration) % 1.0
+        # Planting Seeds (Right Click)
+        if rl.is_mouse_button_pressed(rl.MOUSE_RIGHT_BUTTON):
+            inv = self.player.get('inventory', [])
+            if 0 <= self.selected_item_index < len(inv) and inv[self.selected_item_index]:
+                item = inv[self.selected_item_index]
+                if item['type'] == 'item_seeds_wheat':
+                    w_pos = rl.get_screen_to_world_2d(rl.get_mouse_position(), self.camera)
+                    gx, gy = round(w_pos.x/TILE_WIDTH + w_pos.y/TILE_HEIGHT), round(w_pos.y/TILE_HEIGHT - w_pos.x/TILE_WIDTH)
+                    if abs(gx - self.player['grid_x']) <= 2 and abs(gy - self.player['grid_y']) <= 2:
+                        if self.player['map'] in self.maps:
+                            current_map = self.maps[self.player['map']]
+                            if 0 <= gx < len(current_map) and 0 <= gy < len(current_map):
+                                mat = self.block_definitions[current_map[gy, gx]]['material']
+                                if mat in ['dirt', 'grass']:
+                                    occupied_tile = any(int(o['x']) == gx and int(o['y']) == gy for o in self.objects.get(self.player['map'], []))
+                                    if not occupied_tile:
+                                        self.objects[self.player['map']].append({'type': 'crop', 'x': gx, 'y': gy, 'crop_type': 'wheat', 'stage': 0, 'growth': 0})
+                                        item['count'] -= 1; self._spawn_particles(gx, gy, 5, rl.BROWN)
+                                        if item['count'] <= 0: inv[self.selected_item_index] = None; self.selected_item_index = -1
+
         if self.active_dialogue and rl.get_time() > self.active_dialogue['time']: self.active_dialogue = None
         if self.player.get('moving'): self._update_player_movement(); return
         
@@ -1258,7 +1630,7 @@ class IsoGame:
                     self.player['last_attack'] = rl.get_time()
                     if has_weapon: self.player['stats']['weapon_durability'] -= 1
                     px, py = self.player['grid_x'], self.player['grid_y']
-                    inv_types = [i['type'] for i in self.player['inventory']]
+                    inv_types = [i['type'] for i in self.player['inventory'] if i]
                     hit_npc = False
                     for npc in self.npcs[self.player['map']]:
                         if abs(int(npc['x'])-px) <= 1 and abs(int(npc['y'])-py) <= 1:
@@ -1288,8 +1660,8 @@ class IsoGame:
             px,py,cmap=self.player['grid_x'],self.player['grid_y'],self.player['map']
             found = [i for i in self.items[cmap] if i['x']==px and i['y']==py]
             for item in found:
-                self.add_inventory_item(item['type'])
-                self.items[cmap].remove(item)
+                if self.add_inventory_item(item['type']):
+                    self.items[cmap].remove(item)
         if rl.is_mouse_button_pressed(rl.MOUSE_LEFT_BUTTON):
             w_pos=rl.get_screen_to_world_2d(rl.get_mouse_position(),self.camera); gx,gy=round(w_pos.x/TILE_WIDTH+w_pos.y/TILE_HEIGHT),round(w_pos.y/TILE_HEIGHT-w_pos.x/TILE_WIDTH); self.attempt_move(gx,gy)
         dx, dy = self._get_movement_input()
@@ -1312,6 +1684,15 @@ class IsoGame:
         self.player['x'],self.player['y']=sx+(tx-sx)*t,sy+(ty-sy)*t
         if t>=1.0: self.player.update({'moving':False,'x':float(tx),'y':float(ty),'grid_x':tx,'grid_y':ty,'anim_frame':0})
         px_scr,py_scr=self.to_screen(self.player['x'],self.player['y']); self.camera.target=rl.Vector2(px_scr,py_scr)
+        
+        # Sync Player Emitter
+        if hasattr(self, 'player_emitter_id'):
+            t_comp = self.ecs.get_component(self.player_emitter_id, Transform)
+            e_comp = self.ecs.get_component(self.player_emitter_id, ParticleEmitter)
+            if t_comp and e_comp:
+                t_comp.x, t_comp.y = self.player['x'], self.player['y']
+                t_comp.map_name = self.player['map']
+                e_comp.active = True
 
     def _get_movement_input(self):
         """Extract keyboard input using match statement instead of elif chain."""
@@ -1326,6 +1707,46 @@ class IsoGame:
                 return dx, dy
         return 0, 0
 
+    def _get_neighbors(self, pos, map_name):
+        """Get valid neighbor coordinates for A* pathfinding."""
+        x, y = pos
+        neighbors = []
+        if map_name not in self.maps: return []
+        current_map = self.maps[map_name]
+        map_size = len(current_map)
+        
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < map_size and 0 <= ny < map_size:
+                if self.block_definitions[current_map[ny, nx]]['walkable']:
+                    # O(1) lookup instead of O(N) loop
+                    if (nx, ny) not in self.collision_cache.get(map_name, set()):
+                        neighbors.append((nx, ny))
+        return neighbors
+
+    def _advance_day(self):
+        self.calendar['day'] += 1
+        if self.calendar['day'] > 7:
+            self.calendar['day'] = 1; self.calendar['week'] += 1
+            if self.calendar['week'] > 4:
+                self.calendar['week'] = 1; self.calendar['month'] += 1
+                if self.calendar['month'] > 12:
+                    self.calendar['month'] = 1; self.calendar['year'] += 1
+        m = self.calendar['month']
+        if 1 <= m <= 3: self.calendar['season'] = 'Spring'
+        elif 4 <= m <= 6: self.calendar['season'] = 'Summer'
+        elif 7 <= m <= 9: self.calendar['season'] = 'Autumn'
+        else: self.calendar['season'] = 'Winter'
+        self.active_dialogue = {'text': f"New Day: {self.calendar['season']}, Day {self.calendar['day']}", 'time': rl.get_time() + 4.0}
+        
+        # Crop Growth
+        for map_name in self.objects:
+            for obj in self.objects[map_name]:
+                if obj['type'] == 'crop' and obj['stage'] < 3:
+                    growth = 1.0 + (1.0 if self.weather in ['rainy', 'stormy'] else 0.0)
+                    obj['growth'] += growth
+                    if obj['growth'] >= 1.0: obj['stage'] += 1; obj['growth'] = 0
+
     def _handle_object_harvest(self, obj, inv_types, px, py):
         """Handle object harvesting using match statement."""
         match obj['type']:
@@ -1334,16 +1755,27 @@ class IsoGame:
                 self.items[self.player['map']].append({'type': random.choice(['item_stone', 'item_gem']), 'x': obj['x'], 'y': obj['y']})
                 self.active_dialogue = {'text': "Mined rock!", 'time': rl.get_time() + 1.0}
                 self._spawn_particles(obj['x'], obj['y'], 10, rl.GRAY)
+                self._rebuild_collision_cache() # Update cache
             case 'tree' | 'pine_tree' if 'item_axe' in inv_types:
                 self.objects[self.player['map']].remove(obj)
                 self.items[self.player['map']].append({'type': 'item_wood', 'x': obj['x'], 'y': obj['y']})
                 self.active_dialogue = {'text': "Chopped tree!", 'time': rl.get_time() + 1.0}
                 self._spawn_particles(obj['x'], obj['y'], 10, rl.BROWN)
+                self._rebuild_collision_cache() # Update cache
             case 'bush':
                 self.objects[self.player['map']].remove(obj)
                 self.items[self.player['map']].append({'type': 'item_fiber', 'x': obj['x'], 'y': obj['y']})
                 self.active_dialogue = {'text': "Collected fiber!", 'time': rl.get_time() + 1.0}
                 self._spawn_particles(obj['x'], obj['y'], 5, rl.GREEN)
+            case 'crop':
+                if obj['stage'] == 3:
+                    self.objects[self.player['map']].remove(obj)
+                    self.items[self.player['map']].append({'type': f"item_{obj['crop_type']}", 'x': obj['x'], 'y': obj['y']})
+                    if random.random() < 0.5: self.items[self.player['map']].append({'type': f"item_seeds_{obj['crop_type']}", 'x': obj['x'], 'y': obj['y']})
+                    self.active_dialogue = {'text': f"Harvested {obj['crop_type']}!", 'time': rl.get_time() + 1.0}
+                    self._spawn_particles(obj['x'], obj['y'], 10, rl.GOLD); self.gain_xp(10)
+                else: self.active_dialogue = {'text': "Not ready yet.", 'time': rl.get_time() + 1.0}
+                # Bush isn't in collision cache usually, but good practice if it was
 
     def _handle_npc_interaction(self, npc):
         """Handle NPC interactions using match statement."""
@@ -1353,10 +1785,10 @@ class IsoGame:
             case _:
                 if 'quest' in npc and not npc['quest']['completed']:
                     req = npc['quest']['req']
-                    slot = next((s for s in self.player['inventory'] if s['type'] == req), None)
+                    slot = next((s for s in self.player['inventory'] if s and s['type'] == req), None)
                     if slot:
                         slot['count'] -= 1
-                        if slot['count'] <= 0: self.player['inventory'].remove(slot)
+                        if slot['count'] <= 0: self.player['inventory'][self.player['inventory'].index(slot)] = None
                         npc['quest']['completed'] = True
                         self.player['quests'].append(npc['quest'])
                         self.gain_xp(100)
@@ -1533,6 +1965,20 @@ class IsoGame:
         if self.player.get('map')in self.items: 
             render_list.extend([{'entity_type':'item',**i,'depth':i['x']+i['y']+0.1}for i in self.items[self.player['map']] if abs(i['x']-px) < entity_render_radius and abs(i['y']-py) < entity_render_radius])
             
+        # Add ECS Sprites to render list for proper depth sorting
+        for eid, (pos, sprite) in self.ecs.view(Transform, Sprite):
+            if pos.map_name == self.player['map']:
+                # Determine depth and screen position based on coordinate space
+                if self.ecs.get_component(eid, ScreenSpace):
+                    # Screen space entities (like projectiles)
+                    # Approximate depth using screen Y, or draw on top
+                    depth = 9999 # Draw on top of most things, or calculate based on iso conversion
+                else:
+                    # Grid space entities (mobs, items)
+                    depth = pos.x + pos.y
+                
+                render_list.append({'entity_type': 'ecs_sprite', 'sprite': sprite, 'pos': pos, 'depth': depth})
+
         render_list.sort(key=lambda item:item['depth'])
         for item in render_list:
             dist = math.hypot(item.get('x',0) - px, item.get('y',0) - py)
@@ -1545,15 +1991,19 @@ class IsoGame:
             else:
                 entity_tint = tint
 
-            sx,sy=self.to_screen(item.get('x',0),item.get('y',0)); draw_func=self.draw_dispatch.get(item['entity_type'])
+            if item['entity_type'] == 'ecs_sprite':
+                # Handle coordinate conversion for ECS entities
+                if self.ecs.get_component(eid, ScreenSpace): sx, sy = item['pos'].x, item['pos'].y
+                else: sx, sy = self.to_screen(item['pos'].x, item['pos'].y)
+            else:
+                sx,sy=self.to_screen(item.get('x',0),item.get('y',0))
+            
+            draw_func=self.draw_dispatch.get(item['entity_type'])
             if draw_func: draw_func(item,sx,sy,entity_tint)
         
-        for p in self.particles:
-            rl.draw_rectangle(int(p['x']), int(p['y']), 4, 4, rl.fade(p['color'], p['life']))
-        for p in self.projectiles:
-            tex = self.assets.get(p.get('type', 'projectile_fireball'), self.assets['projectile_fireball'])
-            rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(p['x'], p['y'], tex.width, tex.height), rl.Vector2(tex.width/2, tex.height/2), math.degrees(p['rotation']), rl.WHITE)
-        
+        for system in self.render_systems:
+            system.update(rl.get_frame_time(), self.ecs, self)
+
         # Draw Lightning Bolts
         for b in self.lightning_bolts:
              start = rl.Vector2(b['x'] + random.randint(-50, 50), b['y'] - 400)
@@ -1610,6 +2060,7 @@ class IsoGame:
         
         is_day = 0.25 < self.day_time < 0.75; time_icon = self.assets['icon_sun'] if is_day else self.assets['icon_moon']
         rl.draw_texture_ex(time_icon, rl.Vector2(110, 95), 0, 0.6, rl.WHITE); rl.draw_text(f"{int(self.day_time*24):02d}:00", 135, 98, 10, rl.YELLOW)
+        rl.draw_text(f"Day {self.calendar['day']} ({self.calendar['season']})", 110, 115, 10, rl.WHITE)
         rl.draw_texture_ex(self.assets['icon_stamina'], rl.Vector2(10, 115), 0, 0.6, rl.WHITE); rl.draw_text(f"{int(stats.get('stamina',0))}/{stats.get('max_stamina',100)}", 35, 118, 10, rl.YELLOW)
         rl.draw_text(f"Spell (Z): {self.current_spell.replace('_',' ').title()}", 10, 135, 10, rl.PURPLE)
         
@@ -1620,7 +2071,7 @@ class IsoGame:
             rl.draw_rectangle_rec(rect, rl.fade(rl.BLACK, 0.5)); rl.draw_rectangle_lines(int(rect.x), int(rect.y), int(rect.width), int(rect.height), rl.GRAY)
             rl.draw_text(str(i+1), int(rect.x + 2), int(rect.y + 2), 10, rl.WHITE)
             inv = self.player.get('inventory', [])
-            if i < len(inv) and inv[i]['type'] in self.assets:
+            if i < len(inv) and inv[i] and inv[i]['type'] in self.assets:
                 tex = self.assets[inv[i]['type']]; rl.draw_texture_pro(tex, rl.Rectangle(0,0,tex.width,tex.height), rl.Rectangle(rect.x+5, rect.y+5, 35, 35), rl.Vector2(0,0), 0.0, rl.WHITE)
                 if inv[i]['count'] > 1: rl.draw_text(str(inv[i]['count']), int(rect.x + 28), int(rect.y + 32), 10, rl.WHITE)
 
@@ -1641,7 +2092,7 @@ class IsoGame:
 
     def save_game(self):
         serializable_maps = {k: v.tolist() for k, v in self.maps.items()}
-        data = {'player':self.player,'maps':serializable_maps,'objects':self.objects,'npcs':self.npcs,'items':self.items,'day_time':self.day_time,'chunk_grid':self.chunk_grid,'weather':self.weather}
+        data = {'player':self.player,'maps':serializable_maps,'objects':self.objects,'npcs':self.npcs,'items':self.items,'day_time':self.day_time,'chunk_grid':self.chunk_grid,'weather':self.weather,'calendar':self.calendar}
         try:
             with open('savegame.json','w')as f: json.dump(data,f)
         except Exception as e: print(f"Error saving: {e}")
@@ -1650,21 +2101,23 @@ class IsoGame:
         if not os.path.exists('savegame.json'): return
         try:
             with open('savegame.json','r')as f:
-                data=json.load(f); self.player=data['player']; self.maps={k: np.array(v, dtype=int) for k, v in data['maps'].items()}; self.objects=data['objects']; self.npcs=data['npcs']; self.items=data['items']; self.day_time=data['day_time']; self.weather=data.get('weather','sunny')
+                data=json.load(f); self.player=data['player']; self.maps={k: np.array(v, dtype=int) for k, v in data['maps'].items()}; self.objects=data['objects']; self.npcs=data['npcs']; self.items=data['items']; self.day_time=data['day_time']; self.weather=data.get('weather','sunny'); self.calendar=data.get('calendar', self.calendar)
                 if 'weapon_durability' not in self.player['stats']: self.player['stats'].update({'weapon_durability':50,'max_weapon_durability':50})
                 if 'gold' not in self.player['stats']: self.player['stats']['gold'] = 0
                 if 'hunger' not in self.player['stats']: self.player['stats'].update({'hunger': 100, 'max_hunger': 100})
                 if 'mana' not in self.player['stats']: self.player['stats'].update({'mana': 20, 'max_mana': 20})
                 if 'stamina' not in self.player['stats']: self.player['stats'].update({'stamina': 100, 'max_stamina': 100})
                 if 'equipment' not in self.player: self.player['equipment'] = {'head':None,'chest':None,'hands':None,'legs':None,'feet':None,'weapon':None}
-                # Migrate inventory to stacked format
-                new_inv = []
+               # Migrate inventory to fixed size format
+                new_inv = [None] * 20
+                idx = 0
                 for i in self.player.get('inventory', []):
+                    if idx >= 20: break
                     if isinstance(i, str):
                         found = next((s for s in new_inv if s['type'] == i), None)
                         if found: found['count'] += 1
-                        else: new_inv.append({'type': i, 'count': 1})
-                    else: new_inv.append(i)
+                        else: new_inv[idx] = {'type': i, 'count': 1}; idx += 1
+                    elif i is not None: new_inv[idx] = i; idx += 1
                 self.player['inventory'] = new_inv
                 self.chunk_grid=data.get('chunk_grid',[])
                 if not self.chunk_grid: biomes=['temperate','desert','taiga','swamp']; self.chunk_grid=[[random.choice(biomes)for _ in range(WORLD_CHUNKS)]for _ in range(WORLD_CHUNKS)]
@@ -1740,7 +2193,7 @@ class IsoGame:
         rl.gui_window_box(rl.Rectangle(win_x,win_y,win_w,win_h),"Merchant Shop")
         rl.draw_text(f"Gold: {self.player['stats'].get('gold', 0)}", int(win_x+20), int(win_y+40), 20, rl.GOLD)
         inv = self.player.get('inventory', [])
-        gems = [slot for slot in inv if slot['type'] == 'item_gem']
+        gems = [slot for slot in inv if slot and slot['type'] == 'item_gem']
         y = win_y + 80
         if not gems: rl.draw_text("No gems to sell.", int(win_x+20), int(y), 20, rl.GRAY)
         else:
@@ -1749,7 +2202,7 @@ class IsoGame:
                 if rl.gui_button(rl.Rectangle(win_x+250, y, 100, 25), "Sell (50G)"):
                     slot['count'] -= 1; self.player['stats']['gold'] = self.player['stats'].get('gold', 0) + 50
                     self.active_dialogue = {'text': "Sold Gem for 50 Gold", 'time': rl.get_time() + 2.0}
-                    if slot['count'] <= 0: self.player['inventory'].remove(slot)
+                    if slot['count'] <= 0: self.player['inventory'][self.player['inventory'].index(slot)] = None
                 y += 35
         if rl.gui_button(rl.Rectangle(win_x+win_w//2-50, win_y+win_h-40, 100, 30), "Close"): self.game_state = 'GAMEPLAY'
         rl.end_drawing()
@@ -1910,17 +2363,19 @@ class IsoGame:
             # Slot interaction
             if rl.check_collision_point_rec(mp, slot_rect):
                 if rl.is_mouse_button_pressed(rl.MOUSE_LEFT_BUTTON):
-                    self.selected_item_index = i if i < len(inv) else -1
-                    if i < len(inv):
+                    self.selected_item_index = i
+                    if inv[i]:
                         self.drag_data = {'index': i, 'item': inv[i], 'off_x': mp.x - x, 'off_y': mp.y - y}
                 
                 # Split stack (Shift + Right Click)
                 elif rl.is_mouse_button_pressed(rl.MOUSE_RIGHT_BUTTON) and (rl.is_key_down(rl.KEY_LEFT_SHIFT) or rl.is_key_down(rl.KEY_RIGHT_SHIFT)):
-                    if i < len(inv) and inv[i]['count'] > 1:
-                        if len(inv) < cols * rows:
+                    if inv[i] and inv[i]['count'] > 1:
+                        # Find empty slot
+                        empty_idx = next((idx for idx, s in enumerate(inv) if s is None), -1)
+                        if empty_idx != -1:
                             split_amt = inv[i]['count'] // 2
                             inv[i]['count'] -= split_amt
-                            inv.append({'type': inv[i]['type'], 'count': split_amt})
+                            inv[empty_idx] = {'type': inv[i]['type'], 'count': split_amt}
                             self.active_dialogue = {'text': "Stack split!", 'time': rl.get_time() + 1.0}
                         else:
                             self.active_dialogue = {'text': "Inventory full!", 'time': rl.get_time() + 1.0}
@@ -1929,7 +2384,7 @@ class IsoGame:
             if i == self.selected_item_index: rl.draw_rectangle_lines(int(x), int(y), int(size), int(size), rl.YELLOW)
             else: rl.draw_rectangle_lines(int(x), int(y), int(size), int(size), rl.GRAY)
             
-            if i < len(inv):
+            if inv[i]:
                 # Draw item if not being dragged
                 if not (self.drag_data and self.drag_data['index'] == i):
                     item_data = inv[i]
@@ -1962,11 +2417,11 @@ class IsoGame:
                     c, r = i % cols, i // cols
                     x, y = rect.x + c * (size + pad), rect.y + 30 + r * (size + pad)
                     if rl.check_collision_point_rec(mp, rl.Rectangle(x, y, size, size)):
-                        if i < len(inv) and i != self.drag_data['index']:
+                        if i != self.drag_data['index']:
                             src = self.drag_data['index']
-                            if inv[src]['type'] == inv[i]['type']:
+                            if inv[i] and inv[src]['type'] == inv[i]['type']:
                                 inv[i]['count'] += inv[src]['count']
-                                inv.pop(src)
+                                inv[src] = None
                                 self.selected_item_index = -1
                             else:
                                 inv[src], inv[i] = inv[i], inv[src]
@@ -1974,16 +2429,16 @@ class IsoGame:
                         break
                 self.drag_data = None
 
-        if self.selected_item_index != -1 and self.selected_item_index < len(inv):
+        if self.selected_item_index != -1 and inv[self.selected_item_index]:
             if rl.gui_button(rl.Rectangle(rect.x, rect.y + 30 + rows * (size + pad) + 10, 100, 30), "Drop"):
                 slot = inv[self.selected_item_index]; slot['count'] -= 1
-                if slot['count'] <= 0: inv.pop(self.selected_item_index); self.selected_item_index = -1
+                if slot['count'] <= 0: inv[self.selected_item_index] = None; self.selected_item_index = -1
                 self.items[self.player['map']].append({'type':slot['type'], 'x':self.player['grid_x'], 'y':self.player['grid_y']})
-            if self.selected_item_index != -1 and self.selected_item_index < len(inv) and inv[self.selected_item_index]['type'] == 'item_gem':
+            if self.selected_item_index != -1 and inv[self.selected_item_index] and inv[self.selected_item_index]['type'] == 'item_gem':
                 if rl.gui_button(rl.Rectangle(rect.x + 110, rect.y + 30 + rows * (size + pad) + 10, 100, 30), "Repair"):
                     self.use_item(self.selected_item_index)
             
-            if self.selected_item_index != -1 and self.selected_item_index < len(inv):
+            if self.selected_item_index != -1 and inv[self.selected_item_index]:
                 selected_item = inv[self.selected_item_index]
                 item_type = selected_item['type']
                 # Equip Button
@@ -1996,7 +2451,7 @@ class IsoGame:
                             if current: self.add_inventory_item(current) # Unequip current
                             self.player['equipment'][slot] = item_type # Equip new
                             selected_item['count'] -= 1 # Remove from inventory
-                            if selected_item['count'] <= 0: inv.pop(self.selected_item_index); self.selected_item_index = -1
+                            if selected_item['count'] <= 0: inv[self.selected_item_index] = None; self.selected_item_index = -1
                             self.active_dialogue = {'text': f"Equipped {item_type.replace('item_', '').title()}", 'time': rl.get_time() + 1.0}
 
         if tooltip:
@@ -2069,7 +2524,8 @@ class IsoGame:
         rl.draw_text("Crafting Station", int(rect.x), int(rect.y), 20, rl.BLACK)
         y_pos = rect.y + 35
         inv_counts = {}
-        for slot in self.player.get('inventory', []): inv_counts[slot['type']] = inv_counts.get(slot['type'], 0) + slot['count']
+        for slot in self.player.get('inventory', []): 
+            if slot: inv_counts[slot['type']] = inv_counts.get(slot['type'], 0) + slot['count']
         
         for recipe in self.recipes:
             can_craft = True; ing_text_parts = []
@@ -2084,10 +2540,10 @@ class IsoGame:
             if can_craft:
                 if rl.gui_button(btn_rect, "Craft"):
                     for ing, count in recipe['ingredients'].items():
-                        slot = next((s for s in self.player['inventory'] if s['type'] == ing), None)
+                        slot = next((s for s in self.player['inventory'] if s and s['type'] == ing), None)
                         if slot:
                             slot['count'] -= count
-                            if slot['count'] <= 0: self.player['inventory'].remove(slot)
+                            if slot['count'] <= 0: self.player['inventory'][self.player['inventory'].index(slot)] = None
                     self.add_inventory_item(recipe['result'])
             else: rl.gui_lock(); rl.gui_button(btn_rect, "Need Items"); rl.gui_unlock()
             y_pos += 35
@@ -2128,6 +2584,8 @@ class IsoGame:
         rl.draw_text(f"Time: {self.day_time * 24:.1f}h", int(rect.x + 300), int(settings_y), 14, rl.DARKGRAY)
         settings_y += 25
         rl.draw_text(f"Weather: {self.weather.title()}", int(rect.x + 300), int(settings_y), 14, rl.DARKGRAY)
+        settings_y += 25
+        rl.draw_text(f"Date: {self.calendar['season']}, Day {self.calendar['day']}", int(rect.x + 300), int(settings_y), 14, rl.DARKGRAY)
 
     def run(self):
         while not self.should_close and not rl.window_should_close():
@@ -2170,8 +2628,84 @@ class IsoGame:
             rl.draw_rectangle(int(sx - 16), int(sy - 70), int(32 * ratio), 4, rl.GREEN)
     def _draw_obj(self, item, sx, sy, color):
         if item['type']in self.assets: rl.draw_texture(self.assets[item['type']],int(sx-32),int(sy+self.object_draw_offsets.get(item['type'],0)),color)
+        elif item['type'] == 'crop':
+            tex_key = f"crop_{item['crop_type']}_{item['stage']}"
+            if tex_key in self.assets: rl.draw_texture(self.assets[tex_key], int(sx - 16), int(sy - 16), color)
+
     def _draw_item(self, item, sx, sy, color):
         if item['type']in self.assets: rl.draw_texture(self.assets[item['type']],int(sx-16),int(sy-16),color)
+    
+    def _draw_ecs_sprite(self, item, sx, sy, color):
+        sprite = item['sprite']
+        if sprite.texture_key in self.assets:
+            tex = self.assets[sprite.texture_key]
+            # Combine environmental tint (color) with sprite tint
+            final_color = rl.Color(int(color.r * sprite.tint.r / 255), int(color.g * sprite.tint.g / 255), int(color.b * sprite.tint.b / 255), int(color.a * sprite.tint.a / 255))
+            
+            src_rect = sprite.source_rect if sprite.source_rect else rl.Rectangle(0, 0, tex.width, tex.height)
+            dest_rect = rl.Rectangle(sx + sprite.offset_x, sy + sprite.offset_y, src_rect.width * sprite.scale, src_rect.height * sprite.scale)
+            origin = rl.Vector2(dest_rect.width / 2, dest_rect.height / 2)
+            
+            rl.draw_texture_pro(tex, src_rect, dest_rect, origin, sprite.rotation, final_color)
+
+class ProjectileSystem(System):
+    def update(self, dt, registry, game):
+        for eid, (pos, proj) in registry.view(Transform, ProjectileComp):
+
+            # Wall Collision
+            gx, gy = screen_to_iso(pos.x, pos.y, TILE_WIDTH, TILE_HEIGHT)
+            igx, igy = int(gx + 0.5), int(gy + 0.5)
+            hit_wall = False
+            
+            if pos.map_name in game.maps:
+                current_map = game.maps[pos.map_name]
+                if not (0 <= igx < len(current_map) and 0 <= igy < len(current_map)): hit_wall = True
+                elif not game.block_definitions[current_map[igy, igx]]['walkable']: hit_wall = True
+                else:
+                    for obj in game.objects.get(pos.map_name, []):
+                        if obj.get('type') in ['tree', 'pine_tree', 'rock', 'wall'] and int(obj['x']) == igx and int(obj['y']) == igy:
+                            hit_wall = True; break
+            
+            if hit_wall:
+                registry.destroy_entity(eid)
+                game._create_particles(pos.x, pos.y, 10, rl.GRAY, life_range=(0.3, 0.6))
+                continue
+
+            # ECS Entity Collision (Mobs)
+            hit_ecs = False
+            for t_eid, (t_pos, t_health) in registry.view(Transform, Health):
+                if t_eid == eid: continue
+                if t_pos.map_name != pos.map_name: continue
+                
+                # Convert Grid coordinates to Screen coordinates for collision check
+                if registry.get_component(t_eid, ScreenSpace): tx, ty = t_pos.x, t_pos.y
+                else: 
+                    tx, ty = game.to_screen(t_pos.x, t_pos.y)
+                    ty -= 30 # Offset for sprite center
+                
+                if check_circle_collision(pos.x, pos.y, 10, tx, ty, 20):
+                    t_health.current -= proj.damage
+                    game._spawn_particles(tx, ty, 5, rl.ORANGE)
+                    hit_ecs = True
+                    break
+            
+            if hit_ecs:
+                registry.destroy_entity(eid)
+                continue
+
+            # NPC Collision
+            if pos.map_name in game.npcs:
+                for npc in game.npcs[pos.map_name]:
+                    nsx, nsy = game.to_screen(npc['x'], npc['y'])
+                    if check_circle_collision(pos.x, pos.y, 10, nsx, nsy - 30, 20):
+                        npc['hp'] -= proj.damage
+                        registry.destroy_entity(eid)
+                        if proj.effect_type == 'slow': npc['status'] = {'type': 'slow', 'duration': 3.0}
+                        elif proj.effect_type == 'poison': npc['status'] = {'type': 'poison', 'duration': 5.0, 'tick': 0}
+                        color = rl.SKYBLUE if proj.effect_type == 'slow' else (rl.LIME if proj.effect_type == 'poison' else rl.ORANGE)
+                        game._spawn_particles(npc['x'], npc['y'], 10, color)
+                        if npc['hp'] <= 0: game.npcs[pos.map_name].remove(npc); game.gain_xp(50)
+                        break
 
 if __name__ == "__main__":
     IsoGame().run()

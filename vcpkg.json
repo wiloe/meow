@@ -1,5 +1,5 @@
 {
-    "name": "emu6502",
+    "name": "meow",
     "version-string": "0.1.0",
     "dependencies": [
         "raylib"

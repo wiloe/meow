@@ -5,3 +5,5 @@
 rom.bin
 snapshot.sav
 build/
+eid.py
+__pycache__/utils.cpython-313.pyc
