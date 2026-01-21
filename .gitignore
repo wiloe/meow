@@ -7,4 +7,4 @@ snapshot.sav
 build/
 eid.py
 *.pyc
-__pycache__/asset_loader.cpython-313.pyc
+
