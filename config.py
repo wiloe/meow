@@ -1,4 +1,65 @@
 import pyray as rl
+import ctypes
+
+def _ensure_pascal_case(module):
+    mapping = {
+        'InitWindow': 'init_window',
+        'SetConfigFlags': 'set_config_flags',
+        'SetTargetFPS': 'set_target_fps',
+        'BeginDrawing': 'begin_drawing',
+        'EndDrawing': 'end_drawing',
+        'ClearBackground': 'clear_background',
+        'DrawText': 'draw_text',
+        'DrawTextEx': 'draw_text_ex',
+        'MeasureText': 'measure_text',
+        'MeasureTextEx': 'measure_text_ex',
+        'DrawRectangle': 'draw_rectangle',
+        'DrawRectangleRec': 'draw_rectangle_rec',
+        'DrawRectangleLines': 'draw_rectangle_lines',
+        'DrawRectangleLinesEx': 'draw_rectangle_lines_ex',
+        'DrawRectangleGradientV': 'draw_rectangle_gradient_v',
+        'DrawTexturePro': 'draw_texture_pro',
+        'CheckCollisionPointRec': 'check_collision_point_rec',
+        'GetMousePosition': 'get_mouse_position',
+        'IsMouseButtonPressed': 'is_mouse_button_pressed',
+        'IsMouseButtonReleased': 'is_mouse_button_released',
+        'GetCharPressed': 'get_char_pressed',
+        'IsKeyPressed': 'is_key_pressed',
+        'GetMouseWheelMove': 'get_mouse_wheel_move',
+        'BeginScissorMode': 'begin_scissor_mode',
+        'EndScissorMode': 'end_scissor_mode',
+        'LoadFontEx': 'load_font_ex',
+        'SetTextureFilter': 'set_texture_filter',
+        'LoadTexture': 'load_texture',
+        'LoadTextureFromImage': 'load_texture_from_image',
+        'GenImageChecked': 'gen_image_checked',
+        'UnloadImage': 'unload_image',
+        'WindowShouldClose': 'window_should_close',
+        'GetScreenWidth': 'get_screen_width',
+        'GetScreenHeight': 'get_screen_height',
+        'GetFrameTime': 'get_frame_time',
+        'GetFPS': 'get_fps',
+        'Fade': 'fade',
+        'UnloadTexture': 'unload_texture',
+        'UnloadFont': 'unload_font',
+        'CloseWindow': 'close_window'
+    }
+
+# --- POLYFILLS ---
+if not hasattr(rl, 'Color'):
+    class Color(ctypes.Structure):
+        _fields_ = [("r", ctypes.c_ubyte), ("g", ctypes.c_ubyte), ("b", ctypes.c_ubyte), ("a", ctypes.c_ubyte)]
+    rl.Color = Color
+
+if not hasattr(rl, 'Rectangle'):
+    class Rectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("width", ctypes.c_float), ("height", ctypes.c_float)]
+    rl.Rectangle = Rectangle
+
+if not hasattr(rl, 'Vector2'):
+    class Vector2(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float)]
+    rl.Vector2 = Vector2
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600

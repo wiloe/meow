@@ -1,4 +1,4 @@
-import raylib as rl
+import pyray as rl
 import ctypes
 import math
 import random
@@ -14,6 +14,21 @@ if API_KEY:
     model = genai.GenerativeModel('gemini-pro')
 
 # --- POLYFILLS FOR MISSING RAYLIB STRUCTS/FUNCTIONS ---
+if not hasattr(rl, 'Color'):
+    class Color(ctypes.Structure):
+        _fields_ = [("r", ctypes.c_ubyte), ("g", ctypes.c_ubyte), ("b", ctypes.c_ubyte), ("a", ctypes.c_ubyte)]
+    rl.Color = Color
+
+if not hasattr(rl, 'Rectangle'):
+    class Rectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("width", ctypes.c_float), ("height", ctypes.c_float)]
+    rl.Rectangle = Rectangle
+
+if not hasattr(rl, 'Vector2'):
+    class Vector2(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float)]
+    rl.Vector2 = Vector2
+
 if not hasattr(rl, 'Vector3'):
     class Vector3(ctypes.Structure):
         _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("z", ctypes.c_float)]
@@ -41,82 +56,120 @@ if not hasattr(rl, 'Matrix'):
         ]
     rl.Matrix = Matrix
 
-def Vector3Add(v1, v2): return rl.Vector3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z)
-rl.Vector3Add = Vector3Add
+if not hasattr(rl, 'Vector3Add'):
+    def Vector3Add(v1, v2): return rl.Vector3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z)
+    rl.Vector3Add = Vector3Add
 
-def Vector3Subtract(v1, v2): return rl.Vector3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z)
-rl.Vector3Subtract = Vector3Subtract
+if not hasattr(rl, 'Vector3Subtract'):
+    def Vector3Subtract(v1, v2): return rl.Vector3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z)
+    rl.Vector3Subtract = Vector3Subtract
 
-def Vector3Scale(v, scale): return rl.Vector3(v.x * scale, v.y * scale, v.z * scale)
-rl.Vector3Scale = Vector3Scale
+if not hasattr(rl, 'Vector3Scale'):
+    def Vector3Scale(v, scale): return rl.Vector3(v.x * scale, v.y * scale, v.z * scale)
+    rl.Vector3Scale = Vector3Scale
 
-def Vector3Distance(v1, v2): 
-    dx = v1.x - v2.x; dy = v1.y - v2.y; dz = v1.z - v2.z
-    return math.sqrt(dx*dx + dy*dy + dz*dz)
-rl.Vector3Distance = Vector3Distance
+if not hasattr(rl, 'Vector3Distance'):
+    def Vector3Distance(v1, v2): 
+        dx = v1.x - v2.x; dy = v1.y - v2.y; dz = v1.z - v2.z
+        return math.sqrt(dx*dx + dy*dy + dz*dz)
+    rl.Vector3Distance = Vector3Distance
 
-def Vector3Normalize(v):
-    length = math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
-    if length == 0: return rl.Vector3(0,0,0)
-    return rl.Vector3(v.x/length, v.y/length, v.z/length)
-rl.Vector3Normalize = Vector3Normalize
+if not hasattr(rl, 'Vector3Normalize'):
+    def Vector3Normalize(v):
+        length = math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+        if length == 0: return rl.Vector3(0,0,0)
+        return rl.Vector3(v.x/length, v.y/length, v.z/length)
+    rl.Vector3Normalize = Vector3Normalize
 
-def Vector3Transform(v, mat):
-    x = v.x; y = v.y; z = v.z
-    return rl.Vector3(
-        mat.m0*x + mat.m4*y + mat.m8*z + mat.m12,
-        mat.m1*x + mat.m5*y + mat.m9*z + mat.m13,
-        mat.m2*x + mat.m6*y + mat.m10*z + mat.m14
-    )
-rl.Vector3Transform = Vector3Transform
+if not hasattr(rl, 'Vector3Transform'):
+    def Vector3Transform(v, mat):
+        x = v.x; y = v.y; z = v.z
+        return rl.Vector3(
+            mat.m0*x + mat.m4*y + mat.m8*z + mat.m12,
+            mat.m1*x + mat.m5*y + mat.m9*z + mat.m13,
+            mat.m2*x + mat.m6*y + mat.m10*z + mat.m14
+        )
+    rl.Vector3Transform = Vector3Transform
 
-def MatrixIdentity():
-    m = rl.Matrix()
-    m.m0 = m.m5 = m.m10 = m.m15 = 1.0
-    return m
-rl.MatrixIdentity = MatrixIdentity
+if not hasattr(rl, 'MatrixIdentity'):
+    def MatrixIdentity():
+        m = rl.Matrix()
+        m.m0 = m.m5 = m.m10 = m.m15 = 1.0
+        return m
+    rl.MatrixIdentity = MatrixIdentity
 
-def MatrixMultiply(left, right):
-    result = rl.Matrix()
-    result.m0 = left.m0*right.m0 + left.m4*right.m1 + left.m8*right.m2 + left.m12*right.m3
-    result.m4 = left.m0*right.m4 + left.m4*right.m5 + left.m8*right.m6 + left.m12*right.m7
-    result.m8 = left.m0*right.m8 + left.m4*right.m9 + left.m8*right.m10 + left.m12*right.m11
-    result.m12 = left.m0*right.m12 + left.m4*right.m13 + left.m8*right.m14 + left.m12*right.m15
-    result.m1 = left.m1*right.m0 + left.m5*right.m1 + left.m9*right.m2 + left.m13*right.m3
-    result.m5 = left.m1*right.m4 + left.m5*right.m5 + left.m9*right.m6 + left.m13*right.m7
-    result.m9 = left.m1*right.m8 + left.m5*right.m9 + left.m9*right.m10 + left.m13*right.m11
-    result.m13 = left.m1*right.m12 + left.m5*right.m13 + left.m9*right.m14 + left.m13*right.m15
-    result.m2 = left.m2*right.m0 + left.m6*right.m1 + left.m10*right.m2 + left.m14*right.m3
-    result.m6 = left.m2*right.m4 + left.m6*right.m5 + left.m10*right.m6 + left.m14*right.m7
-    result.m10 = left.m2*right.m8 + left.m6*right.m9 + left.m10*right.m10 + left.m14*right.m11
-    result.m14 = left.m2*right.m12 + left.m6*right.m13 + left.m10*right.m14 + left.m14*right.m15
-    result.m3 = left.m3*right.m0 + left.m7*right.m1 + left.m11*right.m2 + left.m15*right.m3
-    result.m7 = left.m3*right.m4 + left.m7*right.m5 + left.m11*right.m6 + left.m15*right.m7
-    result.m11 = left.m3*right.m8 + left.m7*right.m9 + left.m11*right.m10 + left.m15*right.m11
-    result.m15 = left.m3*right.m12 + left.m7*right.m13 + left.m11*right.m14 + left.m15*right.m15
-    return result
-rl.MatrixMultiply = MatrixMultiply
+if not hasattr(rl, 'MatrixMultiply'):
+    def MatrixMultiply(left, right):
+        result = rl.Matrix()
+        result.m0 = left.m0*right.m0 + left.m4*right.m1 + left.m8*right.m2 + left.m12*right.m3
+        result.m4 = left.m0*right.m4 + left.m4*right.m5 + left.m8*right.m6 + left.m12*right.m7
+        result.m8 = left.m0*right.m8 + left.m4*right.m9 + left.m8*right.m10 + left.m12*right.m11
+        result.m12 = left.m0*right.m12 + left.m4*right.m13 + left.m8*right.m14 + left.m12*right.m15
+        result.m1 = left.m1*right.m0 + left.m5*right.m1 + left.m9*right.m2 + left.m13*right.m3
+        result.m5 = left.m1*right.m4 + left.m5*right.m5 + left.m9*right.m6 + left.m13*right.m7
+        result.m9 = left.m1*right.m8 + left.m5*right.m9 + left.m9*right.m10 + left.m13*right.m11
+        result.m13 = left.m1*right.m12 + left.m5*right.m13 + left.m9*right.m14 + left.m13*right.m15
+        result.m2 = left.m2*right.m0 + left.m6*right.m1 + left.m10*right.m2 + left.m14*right.m3
+        result.m6 = left.m2*right.m4 + left.m6*right.m5 + left.m10*right.m6 + left.m14*right.m7
+        result.m10 = left.m2*right.m8 + left.m6*right.m9 + left.m10*right.m10 + left.m14*right.m11
+        result.m14 = left.m2*right.m12 + left.m6*right.m13 + left.m10*right.m14 + left.m14*right.m15
+        result.m3 = left.m3*right.m0 + left.m7*right.m1 + left.m11*right.m2 + left.m15*right.m3
+        result.m7 = left.m3*right.m4 + left.m7*right.m5 + left.m11*right.m6 + left.m15*right.m7
+        result.m11 = left.m3*right.m8 + left.m7*right.m9 + left.m11*right.m10 + left.m15*right.m11
+        result.m15 = left.m3*right.m12 + left.m7*right.m13 + left.m11*right.m14 + left.m15*right.m15
+        return result
+    rl.MatrixMultiply = MatrixMultiply
 
-def MatrixTranslate(x, y, z):
-    m = rl.MatrixIdentity(); m.m12 = x; m.m13 = y; m.m14 = z
-    return m
-rl.MatrixTranslate = MatrixTranslate
+if not hasattr(rl, 'MatrixTranslate'):
+    def MatrixTranslate(x, y, z):
+        m = rl.MatrixIdentity(); m.m12 = x; m.m13 = y; m.m14 = z
+        return m
+    rl.MatrixTranslate = MatrixTranslate
 
-def MatrixScale(x, y, z):
-    m = rl.MatrixIdentity(); m.m0 = x; m.m5 = y; m.m10 = z
-    return m
-rl.MatrixScale = MatrixScale
+if not hasattr(rl, 'MatrixScale'):
+    def MatrixScale(x, y, z):
+        m = rl.MatrixIdentity(); m.m0 = x; m.m5 = y; m.m10 = z
+        return m
+    rl.MatrixScale = MatrixScale
 
-def MatrixRotateXYZ(ang):
-    cx, sx = math.cos(ang.x), math.sin(ang.x)
-    cy, sy = math.cos(ang.y), math.sin(ang.y)
-    cz, sz = math.cos(ang.z), math.sin(ang.z)
+if not hasattr(rl, 'MatrixRotateXYZ'):
+    def MatrixRotateXYZ(ang):
+        cx, sx = math.cos(ang.x), math.sin(ang.x)
+        cy, sy = math.cos(ang.y), math.sin(ang.y)
+        cz, sz = math.cos(ang.z), math.sin(ang.z)
+        m = rl.MatrixIdentity()
+        m.m0 = cz*cy; m.m4 = cz*sy*sx - sz*cx; m.m8 = cz*sy*cx + sz*sx
+        m.m1 = sz*cy; m.m5 = sz*sy*sx + cz*cx; m.m9 = sz*sy*cx - cz*sx
+        m.m2 = -sy;   m.m6 = cy*sx;            m.m10 = cy*cx
+        return m
+    rl.MatrixRotateXYZ = MatrixRotateXYZ
+
+def MatrixRotateX(angle):
     m = rl.MatrixIdentity()
-    m.m0 = cz*cy; m.m4 = cz*sy*sx - sz*cx; m.m8 = cz*sy*cx + sz*sx
-    m.m1 = sz*cy; m.m5 = sz*sy*sx + cz*cx; m.m9 = sz*sy*cx - cz*sx
-    m.m2 = -sy;   m.m6 = cy*sx;            m.m10 = cy*cx
+    c = math.cos(angle)
+    s = math.sin(angle)
+    m.m5 = c; m.m6 = s
+    m.m9 = -s; m.m10 = c
     return m
-rl.MatrixRotateXYZ = MatrixRotateXYZ
+rl.MatrixRotateX = MatrixRotateX
+
+def MatrixRotateY(angle):
+    m = rl.MatrixIdentity()
+    c = math.cos(angle)
+    s = math.sin(angle)
+    m.m0 = c; m.m2 = -s
+    m.m8 = s; m.m10 = c
+    return m
+rl.MatrixRotateY = MatrixRotateY
+
+def MatrixRotateZ(angle):
+    m = rl.MatrixIdentity()
+    c = math.cos(angle)
+    s = math.sin(angle)
+    m.m0 = c; m.m1 = s
+    m.m4 = -s; m.m5 = c
+    return m
+rl.MatrixRotateZ = MatrixRotateZ
 
 def CheckCollisionSpheres(c1, r1, c2, r2):
     return rl.Vector3Distance(c1, c2) < (r1 + r2)
@@ -133,8 +186,41 @@ if not hasattr(rl, 'CAMERA_ORTHOGRAPHIC'):
 # --- FIX FOR RAYLIB STRING ENCODING ---
 # The raylib ctypes binding requires bytes for char*, but the code uses strings.
 # We monkey-patch the functions to automatically encode strings to UTF-8.
-_orig_init_window = rl.InitWindow
-_orig_draw_text = rl.DrawText
+
+# Compatibility: Map snake_case to PascalCase if missing
+_compat_map = {
+    'InitWindow': 'init_window', 'DrawText': 'draw_text', 'SetTargetFPS': 'set_target_fps',
+    'SetExitKey': 'set_exit_key', 'CloseWindow': 'close_window', 'WindowShouldClose': 'window_should_close',
+    'BeginDrawing': 'begin_drawing', 'EndDrawing': 'end_drawing', 'ClearBackground': 'clear_background',
+    'BeginMode3D': 'begin_mode_3d', 'EndMode3D': 'end_mode_3d', 'DrawGrid': 'draw_grid',
+    'DrawCube': 'draw_cube', 'DrawSphere': 'draw_sphere', 'DrawLine': 'draw_line',
+    'DrawCircle': 'draw_circle', 'DrawCircleLines': 'draw_circle_lines', 'DrawRectangle': 'draw_rectangle',
+    'DrawRectangleRec': 'draw_rectangle_rec', 'DrawRectangleLines': 'draw_rectangle_lines',
+    'GetFrameTime': 'get_frame_time', 'GetTime': 'get_time', 'IsKeyDown': 'is_key_down',
+    'IsKeyPressed': 'is_key_pressed', 'IsMouseButtonPressed': 'is_mouse_button_pressed',
+    'GetMousePosition': 'get_mouse_position', 'CheckCollisionPointRec': 'check_collision_point_rec',
+    'GenImagePerlinNoise': 'gen_image_perlin_noise', 'LoadTextureFromImage': 'load_texture_from_image',
+    'UnloadImage': 'unload_image', 'GenMeshSphere': 'gen_mesh_sphere', 'GenMeshCone': 'gen_mesh_cone',
+    'LoadMaterialDefault': 'load_material_default', 'GetColor': 'get_color', 'ColorAlpha': 'color_alpha',
+    'Fade': 'fade', 'SetTraceLogLevel': 'set_trace_log_level', 'GetScreenToWorldRay': 'get_screen_to_world_ray',
+    'GetRayCollisionSphere': 'get_ray_collision_sphere', 'DrawMesh': 'draw_mesh', 'DrawCircle3D': 'draw_circle_3d',
+    'rlPushMatrix': 'rl_push_matrix', 'rlPopMatrix': 'rl_pop_matrix', 'rlTranslatef': 'rl_translatef',
+    'rlRotatef': 'rl_rotatef', 'rlBegin': 'rl_begin', 'rlEnd': 'rl_end', 'rlVertex3f': 'rl_vertex3f',
+    'rlColor4ub': 'rl_color4ub', 'rlSetClipPlanes': 'rl_set_clip_planes'
+}
+for pascal, snake in _compat_map.items():
+    if not hasattr(rl, pascal) and hasattr(rl, snake): setattr(rl, pascal, getattr(rl, snake))
+
+# --- SAFETY MOCKS FOR RLGL FUNCTIONS ---
+# If these are missing, the game would crash during drawing.
+_rlgl_mocks = ['rlPushMatrix', 'rlPopMatrix', 'rlTranslatef', 'rlRotatef', 'rlBegin', 'rlEnd', 'rlVertex3f', 'rlColor4ub', 'rlSetClipPlanes']
+for func in _rlgl_mocks:
+    if not hasattr(rl, func):
+        print(f"WARNING: {func} missing. Mocking to prevent crash.")
+        setattr(rl, func, lambda *args: None)
+
+_orig_init_window = getattr(rl, 'InitWindow', getattr(rl, 'init_window', None))
+_orig_draw_text = getattr(rl, 'DrawText', getattr(rl, 'draw_text', None))
 
 def _init_window_wrapper(width, height, title):
     if isinstance(title, str):

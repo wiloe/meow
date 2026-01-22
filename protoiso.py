@@ -5,6 +5,7 @@ import json
 import os
 import psutil
 import math
+import ctypes
 from config import *
 from ecs import ECSRegistry, Transform, Velocity, Lifetime, Health, ProjectileComp, ParticleComp, ParticleEmitter, Sprite, ScreenSpace, AIComponent, Animation
 from systems import PhysicsSystem, ParticleUpdateSystem, ParticleEmitterSystem, LifetimeSystem, MobSystem, AnimationSystem, RenderSystem, ProjectileSystem
@@ -12,6 +13,22 @@ from asset_loader import AssetLoader
 from utils import iso_to_screen, normalize, clamp, get_angle, check_circle_collision, screen_to_iso, a_star_search
 from ui import ChatSystem
 from quest_system import QuestSystem, Quest
+
+# --- POLYFILLS ---
+if not hasattr(rl, 'Color'):
+    class Color(ctypes.Structure):
+        _fields_ = [("r", ctypes.c_ubyte), ("g", ctypes.c_ubyte), ("b", ctypes.c_ubyte), ("a", ctypes.c_ubyte)]
+    rl.Color = Color
+
+if not hasattr(rl, 'Rectangle'):
+    class Rectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("width", ctypes.c_float), ("height", ctypes.c_float)]
+    rl.Rectangle = Rectangle
+
+if not hasattr(rl, 'Vector2'):
+    class Vector2(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float)]
+    rl.Vector2 = Vector2
 
 class IsoGame:
     def __init__(self):

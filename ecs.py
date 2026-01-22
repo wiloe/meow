@@ -2,8 +2,25 @@ import pyray as rl
 import numpy as np
 import math
 import random
+import ctypes
 from dataclasses import dataclass, field
 from typing import List, Tuple, Any, Set, Dict
+
+# --- POLYFILLS ---
+if not hasattr(rl, 'Color'):
+    class Color(ctypes.Structure):
+        _fields_ = [("r", ctypes.c_ubyte), ("g", ctypes.c_ubyte), ("b", ctypes.c_ubyte), ("a", ctypes.c_ubyte)]
+    rl.Color = Color
+
+if not hasattr(rl, 'Rectangle'):
+    class Rectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("width", ctypes.c_float), ("height", ctypes.c_float)]
+    rl.Rectangle = Rectangle
+
+if not hasattr(rl, 'Vector2'):
+    class Vector2(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float)]
+    rl.Vector2 = Vector2
 
 class Component: pass
 
