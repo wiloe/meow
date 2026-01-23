@@ -132,15 +132,15 @@ class ParticleSystem:
         bg_img = rl.gen_image_checked(SCREEN_WIDTH, SCREEN_HEIGHT, 40, 40, rl.Color(20, 20, 20, 255), rl.Color(10, 10, 10, 255))
         self.bg_texture = rl.load_texture_from_image(bg_img)
         rl.unload_image(bg_img)
-        sound_path = os.path.join(os.path.dirname(__file__), "burst.wav")
+        sound_path = os.path.join(os.path.dirname(__file__), "../assets/burst.wav")
         self.burst_sound = rl.load_sound(sound_path.encode('utf-8'))
-        fuse_path = os.path.join(os.path.dirname(__file__), "fuse.wav")
+        fuse_path = os.path.join(os.path.dirname(__file__), "../assets/fuse.wav")
         self.fuse_sound = rl.load_sound(fuse_path.encode('utf-8'))
-        pop_path = os.path.join(os.path.dirname(__file__), "pop.wav")
+        pop_path = os.path.join(os.path.dirname(__file__), "../assets/pop.wav")
         self.pop_sound = rl.load_sound(pop_path.encode('utf-8'))
         
         # Music & Analysis
-        music_path = os.path.join(os.path.dirname(__file__), "music.wav")
+        music_path = os.path.join(os.path.dirname(__file__), "../assets/music.wav")
         self.music = None
         self.wave_data = None
         self.wave_sample_rate = 44100

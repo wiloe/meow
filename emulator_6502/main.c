@@ -330,9 +330,12 @@ int main(int argc, char *argv[]) {
     const char *romPath = "rom.bin";
     FILE *f = fopen(romPath, "rb");
     if (!f) {
-      romPath = "../rom.bin"; // Try parent directory (common in build folders)
-      f = fopen(romPath, "rb");
-    }
+                  romPath = "../rom.bin"; // Try parent directory (common in build folders)
+                  f = fopen(romPath, "rb");
+                  if (!f) {
+                      romPath = "../assets/rom.bin"; // Try assets directory
+                      f = fopen(romPath, "rb");
+                  }    }
 
     if (f) {
       fread(cpu.memory, 1, MEM_SIZE, f);

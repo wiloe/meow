@@ -93,8 +93,8 @@ class IsoGame:
         self.collision_cache = {} # New spatial cache
         self.npcs = {}
         self.player = {}
-        self.fx_use = rl.load_sound("pop.wav")
-        self.fx_step = rl.load_sound("pop.wav"); rl.set_sound_pitch(self.fx_step, 0.6); rl.set_sound_volume(self.fx_step, 0.3) # TODO: Use a better sound
+        self.fx_use = rl.load_sound(os.path.join(os.path.dirname(__file__), "../assets/pop.wav"))
+        self.fx_step = rl.load_sound(os.path.join(os.path.dirname(__file__), "../assets/pop.wav")); rl.set_sound_pitch(self.fx_step, 0.6); rl.set_sound_volume(self.fx_step, 0.3) # TODO: Use a better sound
         self.camera = rl.Camera2D(rl.Vector2(SCREEN_WIDTH//2, SCREEN_HEIGHT//2), rl.Vector2(0,0), 0.0, 1.5)
         
         self.object_draw_offsets = {'tree':-110, 'pine_tree':-110, 'rock':-45, 'ladder':-32, 'chest':-32, 'wall':-80, 'dungeon_wall':-80, 'campfire':-32, 'bush':-32}

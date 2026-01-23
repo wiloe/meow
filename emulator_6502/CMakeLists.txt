@@ -28,7 +28,7 @@ if(TARGET raylib)
 endif()
 
 # --- Icon Generation ---
-add_executable(icon_gen icon_generator.c)
+add_executable(icon_gen ../tools/icon_generator.c)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/icon.ico

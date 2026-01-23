@@ -1,61 +1,62 @@
-# Meow Scratchpad
+# Project Meow
 
-This repository is basically used as a scratchpad repo where I put my toy projects.
+This repository contains a collection of game prototypes and experiments built with Raylib, utilizing both Python (`pyray`) and C.
 
-## C Projects
+## Directory Structure
 
-### Meow 6502 Emulator
-A 6502 emulator written in C using Raylib. It features a GUI debugger, memory viewer, and a simple assembler.
+### `emulator_6502/`
+A functional 6502 emulator with a graphical debugger.
+- **Languages**: C
+- **Key Files**: `main.c`, `cpu.c`, `debugger.c`, `rom_generator.c`
+- **Features**: Step-through debugging, memory inspection, disassembly, and a simple assembler.
+- **Build**: Contains `CMakeLists.txt` and `Makefile`.
 
-## Python Projects
+### `iso_rpg/`
+An isometric RPG engine prototype.
+- **Languages**: Python
+- **Key Files**: `protoiso.py`, `utils.py`, `quest_system.py`, `ecs.py`
+- **Features**: Tile-based world, inventory system, crafting, day/night cycle, weather, and NPCs.
 
-### IsoRPG Engine
-A simple isometric RPG engine built with Python and PyRay.
+### `space_sim/`
+A 3D space exploration and combat game.
+- **Languages**: Python
+- **Key Files**: `sol_runner.py`
+- **Features**: Space flight, combat, trading, planetary docking, and hyperspace travel.
 
-**Features:**
-*   **Isometric World:** Explorable world with different biomes (temperate, desert) and a cave system.
-*   **Player and NPCs:** A player character and simple NPCs with dialogue.
-*   **Object Interaction:** Interact with objects like ladders to move between maps.
-*   **Point-and-Click Movement:** Move the player by clicking on the map.
-*   **Character Animation:** Simple walking animation for the player.
-*   **Dynamic Object Generation:** Trees, rocks, and chests are procedurally placed on the map.
+### `particles/`
+A complex particle system and visualizer.
+- **Languages**: Python, GLSL
+- **Key Files**: `particle_sys.py`, `bloom.fs`, `shockwave.fs`
+- **Features**: Various emitter modes (Fire, Galaxy, Rain, etc.), audio visualization, and shader effects.
 
-**Debugging Tools:**
+### `fractals/`
+A real-time Mandelbrot set renderer.
+- **Languages**: Python
+- **Key Files**: `mandelbrot.py`
+- **Features**: Zooming, panning, and different color palettes using GLSL shaders.
 
-*   **Bounding Box Overlay:** Press `B` to toggle. Green indicates safe, red indicates collision.
-*   **Un-blocking Exits:** Map generation logic ensures exits are accessible.
+### `tools/`
+Utility scripts and tools.
+- **`generate_wav.py`**: Procedurally generate WAV files for sound effects.
+- **`icon_generator.c`**: Utility to generate icon data.
 
-**Files:**
-*   `protoiso.py`
-*   `utils.py`
+### `assets/`
+Shared assets for the projects.
+- Contains `.wav` files, images, and binary ROMs.
 
-### Particle System Simulator
-A simulation of particle physics that allows users to configure various parameters to observe different behaviors.
+## Setup
 
-**Features:**
-*   Configurable particle variables.
+### Python Projects
+Ensure you have the required dependencies installed:
+```bash
+pip install raylib numpy google-generativeai psutil
+```
+To run a project, navigate to its directory and run the main script (e.g., `python protoiso.py`).
 
-**Files:**
-*   `particalsys.py`
-
-### Wave Music Generator
-A utility script designed to programmatically generate audio files in the `.wav` format.
-
-**Files:**
-*   `generate_waves.py`
-
-### Mandelbrot Set Visualizer
-A script to calculate and visualize the Mandelbrot set fractal.
-
-**Files:**
-*   `mandlebrot.py`
-
-### Sol Runner
-A space trading and combat simulator.
-
-**Features:**
-*   Trading mechanics.
-*   Combat system.
-
-**Files:**
-*   `sol_runner.py`
+### C Projects
+Navigate to `emulator_6502` and use CMake or Make to build:
+```bash
+cd emulator_6502
+cmake -S . -B build
+cmake --build build
+```
