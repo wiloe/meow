@@ -1,1 +1,6 @@
-[]
+[
+    {
+        "title": "System Monitor",
+        "content": "FPS: 60\nCPU: 19.8%\nRAM: 79.7%",
+        "anim_progress": 1.0,
+        "texture": 

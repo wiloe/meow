@@ -74,6 +74,28 @@ DARK_THEME = UITheme(
     button_hover=pr.Color(100, 255, 218, 255)       # Cyan
 )
 
+# "NeoTokyo Moon" theme
+NEOTOKYO_THEME = UITheme(
+    name="NeoTokyo Moon",
+    background_color=pr.Color(12, 16, 33, 255),     # Deep Blue/Black
+    surface_color=pr.Color(23, 28, 50, 255),        # Dark Blue
+    text_primary=pr.Color(200, 210, 255, 255),      # Pale Blue
+    text_secondary=pr.Color(100, 110, 160, 255),    # Muted Blue
+    accent_color=pr.Color(255, 0, 100, 255),        # Neon Pink
+    button_hover=pr.Color(0, 255, 200, 255)         # Neon Cyan
+)
+
+# "Gruvbox" theme
+GRUVBOX_THEME = UITheme(
+    name="Gruvbox",
+    background_color=pr.Color(40, 40, 40, 255),     # Dark0
+    surface_color=pr.Color(60, 56, 54, 255),        # Dark1
+    text_primary=pr.Color(235, 219, 178, 255),      # Light1
+    text_secondary=pr.Color(168, 153, 132, 255),    # Gray
+    accent_color=pr.Color(254, 128, 25, 255),       # Orange
+    button_hover=pr.Color(184, 187, 38, 255)        # Green
+)
+
 # -------------------------------------------------------------------------
 # 3. UI Components (Widgets that use the theme)
 # -------------------------------------------------------------------------
@@ -116,6 +138,30 @@ def draw_styled_button(rect: pr.Rectangle, text: str, theme: UITheme) -> bool:
 
     return is_clicked
 
+def wrap_text(font, text, max_width, font_size, spacing):
+    """Wraps text to fit within max_width."""
+    if not text: return ""
+    lines = []
+    for paragraph in text.split('\n'):
+        words = paragraph.split(' ')
+        current_line = []
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            if font:
+                size = pr.measure_text_ex(font, test_line, float(font_size), spacing)
+                width = size.x
+            else:
+                width = pr.measure_text(test_line, int(font_size))
+            
+            if width > max_width:
+                if current_line: lines.append(' '.join(current_line))
+                current_line = [word]
+            else:
+                current_line.append(word)
+        if current_line:
+            lines.append(' '.join(current_line))
+    return '\n'.join(lines)
+
 def draw_card(rect: pr.Rectangle, item: Dict[str, Any], index: int, theme: UITheme, edit_state: Dict[str, Any], alpha: float = 1.0, interactive: bool = True) -> str:
     """Draws a 'card'. Returns 'delete', 'modified', or None."""
     # Resolve custom color if present
@@ -123,6 +169,12 @@ def draw_card(rect: pr.Rectangle, item: Dict[str, Any], index: int, theme: UIThe
     if 'color' in item:
         c = item['color']
         base_color = pr.Color(c[0], c[1], c[2], 255)
+    
+    # Resolve custom text color
+    custom_text_col = theme.text_primary
+    if 'text_color' in item:
+        tc = item['text_color']
+        custom_text_col = pr.Color(tc[0], tc[1], tc[2], 255)
 
     # Apply alpha for fade-in effect
     bg_color = pr.fade(base_color, alpha)
@@ -132,7 +184,7 @@ def draw_card(rect: pr.Rectangle, item: Dict[str, Any], index: int, theme: UIThe
     
     border_color = pr.fade(theme.text_secondary, alpha)
     title_color = pr.fade(theme.accent_color, alpha)
-    content_color = pr.fade(theme.text_primary, alpha)
+    content_color = pr.fade(custom_text_col, alpha)
 
     # Draw Drop Shadow
     shadow_offset = 5
@@ -211,13 +263,21 @@ def draw_card(rect: pr.Rectangle, item: Dict[str, Any], index: int, theme: UIThe
             display_content = edit_state['buffer'] + "_"
             content_color = pr.RED
 
-    # Draw Title
+    # Draw Title & Content (Bounded)
+    # We use a scissor mode to ensure text stays inside the card visually
+    pr.begin_scissor_mode(int(rect.x), int(rect.y), int(rect.width), int(rect.height))
+    
+    # Wrap Content
+    wrapped_content = wrap_text(theme.font, display_content, rect.width - 40, 18, 1.0)
+    
     if theme.font:
         pr.draw_text_ex(theme.font, display_title, pr.Vector2(rect.x + 20, rect.y + 20), theme.font_size_body, 1.0, title_color)
-        pr.draw_text_ex(theme.font, display_content, pr.Vector2(rect.x + 20, rect.y + content_y_offset), 18, 1.0, content_color)
+        pr.draw_text_ex(theme.font, wrapped_content, pr.Vector2(rect.x + 20, rect.y + content_y_offset), 18, 1.0, content_color)
     else:
         pr.draw_text(display_title, int(rect.x + 20), int(rect.y + 20), theme.font_size_body, title_color)
-        pr.draw_text(display_content, int(rect.x + 20), int(rect.y + content_y_offset), 18, content_color)
+        pr.draw_text(wrapped_content, int(rect.x + 20), int(rect.y + content_y_offset), 18, content_color)
+    
+    pr.end_scissor_mode()
 
     # Draw Interactive Elements
     if interactive:
@@ -239,7 +299,21 @@ def draw_card(rect: pr.Rectangle, item: Dict[str, Any], index: int, theme: UIThe
             
             pr.draw_rectangle_rec(swatch_rect, pr.fade(swatch_color, alpha))
 
-        # 2. Delete Button (Top Right)
+        # 2. Text Color Swatches (Bottom Right)
+        text_swatches = [
+            (theme.text_primary.r, theme.text_primary.g, theme.text_primary.b), # Default
+            (0, 0, 0), (255, 255, 255)
+        ]
+        for i, col in enumerate(text_swatches):
+            ts_rect = pr.Rectangle(rect.x + rect.width - 20 - (len(text_swatches)-i) * (swatch_size + 5), rect.y + rect.height - 25, swatch_size, swatch_size)
+            ts_color = pr.Color(col[0], col[1], col[2], 255)
+            if pr.check_collision_point_rec(mouse_point, ts_rect):
+                pr.draw_rectangle_lines_ex(pr.Rectangle(ts_rect.x-2, ts_rect.y-2, ts_rect.width+4, ts_rect.height+4), 1, theme.text_secondary)
+                if pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT):
+                    item['text_color'] = col
+            pr.draw_rectangle_rec(ts_rect, pr.fade(ts_color, alpha))
+
+        # 3. Delete Button (Top Right)
         btn_size = 20
         btn_rect = pr.Rectangle(rect.x + rect.width - btn_size - 10, rect.y + 10, btn_size, btn_size)
         mouse_point = pr.get_mouse_position()
@@ -411,8 +485,10 @@ def main():
         LIGHT_THEME.font = custom_font
         DARK_THEME.font = custom_font
 
+    themes = [LIGHT_THEME, DARK_THEME, NEOTOKYO_THEME, GRUVBOX_THEME]
+    current_theme_idx = 0
     # State
-    current_theme = LIGHT_THEME
+    current_theme = themes[current_theme_idx]
     drag_state = {"dragging": False, "index": -1, "item": None, "offset_x": 0.0, "offset_y": 0.0}
     scroll_state = {"offset": 0.0}
     edit_state = {"index": -1, "field": "", "buffer": ""}
@@ -472,12 +548,13 @@ def main():
                 sys_card["content"] = f"FPS: {fps}\nCPU: {cpu}%\nRAM: {ram}%"
 
         # --- Update Logic ---
-        if pr.is_key_pressed(pr.KEY_SPACE):
-            # Toggle theme
-            if current_theme == LIGHT_THEME:
-                current_theme = DARK_THEME
-            else:
-                current_theme = LIGHT_THEME
+        # Switch themes with Arrow Keys (Left/Right)
+        if pr.is_key_pressed(pr.KEY_RIGHT):
+            current_theme_idx = (current_theme_idx + 1) % len(themes)
+            current_theme = themes[current_theme_idx]
+        elif pr.is_key_pressed(pr.KEY_LEFT):
+            current_theme_idx = (current_theme_idx - 1) % len(themes)
+            current_theme = themes[current_theme_idx]
 
         # --- Drawing Logic ---
         pr.begin_drawing()
@@ -488,10 +565,10 @@ def main():
         # 2. Draw Header
         if current_theme.font:
             pr.draw_text_ex(current_theme.font, f"Theme: {current_theme.name}", pr.Vector2(20, 20), current_theme.font_size_header, 1.0, current_theme.text_primary)
-            pr.draw_text_ex(current_theme.font, "Press SPACE to toggle theme", pr.Vector2(20, 70), current_theme.font_size_body, 1.0, current_theme.text_secondary)
+            pr.draw_text_ex(current_theme.font, "Use LEFT/RIGHT arrows to switch themes", pr.Vector2(20, 70), current_theme.font_size_body, 1.0, current_theme.text_secondary)
         else:
             pr.draw_text(f"Theme: {current_theme.name}", 20, 20, current_theme.font_size_header, current_theme.text_primary)
-            pr.draw_text("Press SPACE to toggle theme", 20, 70, current_theme.font_size_body, current_theme.text_secondary)
+            pr.draw_text("Use LEFT/RIGHT arrows to switch themes", 20, 70, current_theme.font_size_body, current_theme.text_secondary)
 
         # 3. Draw Grid System
         # Define area for the grid (below header, with margins)
