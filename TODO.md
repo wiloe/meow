@@ -16,3 +16,7 @@
 - [ ] **ECS Rendering**: Move the main isometric world rendering loop from `protoiso.py` into a new `RenderSystem` in `iso_rpg/systems.py` to fully utilize the ECS architecture.
 - [ ] **Refactor IsoGame**: Extract `IsoGame` logic into specialized managers (e.g., `InputManager`, `StateManager`) to reduce the "God Object" anti-pattern.
 - [ ] **Quest System**: Decouple `QuestSystem` from `IsoGame.player` dictionary by introducing a proper `Player` class or component.
+
+## Asset Management
+- [x] **Consolidate Assets**: Moved `.vscode/Assets` to `assets/img`.
+- [ ] **Metadata Audit**: Verify copyright status of assets in `assets/img`. Initial check shows Adobe XMP data in folders `1119`, `1639`, `2121`.

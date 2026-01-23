@@ -11,3 +11,9 @@
 *   **Assets**: All textures are currently procedurally generated in `asset_loader.py`. This is good for prototyping but limits artistic control. Audio files are loaded directly in components, which can lead to resource duplication.
 *   **Quest System**: `quest_system.py` contains logic for a "legacy format" (simple dicts), indicating a need to standardize on the new `Quest` class structure.
 *   **AI**: `MobSystem` uses A* pathfinding but the movement logic (`d < 0.1`) can be jittery. It re-plans paths frequently (every 0.5-1.0s).
+
+## Asset Organization
+*   **Move**: Relocated `.vscode/Assets` to `assets/img`.
+*   **Metadata Check**: Ran `tools/check_metadata.py` on sample PNGs.
+    *   `1119`, `1639`, `2121`: Contain Adobe XMP metadata (`XML:com.adobe.xmp`). No explicit "Copyright" text tag found in standard fields.
+    *   `hextiles`: Clean of XMP, only basic DPI/ICC profile data.
